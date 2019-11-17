@@ -1,4 +1,4 @@
-package net.floodlightcontroller.arp_detect;
+package net.floodlightcontroller.sdn_arp_spoof_detection;
 
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -31,5 +31,13 @@ public class User {
 	}
 	public void setConnectedSwitch(IOFSwitch sw) {
 		connectedSwitch = sw;
+	}
+	@Override
+	public boolean equals(Object obj){
+		if(obj instanceof User){
+			User user = (User) obj;
+			return (mac.equals(user.mac) && connectedSwitch.equals(user.connectedSwitch) && port.equals(user.port));
+		}
+		return false;
 	}
 }

@@ -1,4 +1,4 @@
-package net.floodlightcontroller.arp_detect;
+package net.floodlightcontroller.sdn_arp_spoof_detection;
 
 import java.util.Collection;
 import java.util.Map;
@@ -43,6 +43,7 @@ public class ArpSpoofDetector implements IFloodlightModule {
 		// TODO Auto-generated method stub
 		floodlightProviderService = context.getServiceImpl(IFloodlightProviderService.class);
 		switchService = context.getServiceImpl(IOFSwitchService.class);
+		authenticator = new MacAuthenticator(floodlightProviderService);
 	}
 
 	@Override
@@ -50,8 +51,6 @@ public class ArpSpoofDetector implements IFloodlightModule {
 		// TODO Auto-generated method stub
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, authenticator);
 		floodlightProviderService.addOFMessageListener(OFType.FLOW_REMOVED, authenticator);
-		floodlightProviderService.addOFMessageListener(OFType.ERROR, authenticator);
-		switchService.addOFSwitchListener(authenticator);
 	}
 
 }
