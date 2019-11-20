@@ -14,8 +14,10 @@ import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.ArpOpcode;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFBufferId;
@@ -50,11 +52,14 @@ public class MacAuthenticator implements Authenticator {
 		if(etherType.equals(EthType.ARP)){
 			ARP arp = (ARP) eth.getPayload();
 			if(arp.getProtocolType() == (short)1){
+				log.info("ARP REQUEST FOUND"); 
 				MacAddress senderAddress = arp.getSenderHardwareAddress();
 				HashMap<OFPort,MacAddress> record = userMap.get(sw);
 				if(record==null){
 					userMap.put(sw,new HashMap<>());
 					record = userMap.get(sw);
+					Match arpMatch = createArpMatch(sw);
+					writeArpFlow(sw,arpMatch);
 				}
 				MacAddress realAddress = record.get(inPort);
 				if(realAddress == null){
@@ -70,6 +75,7 @@ public class MacAuthenticator implements Authenticator {
 	}
 	private Command handleFlowRemoved(IOFSwitch sw,OFFlowRemoved msg,FloodlightContext cntx){
 		OFPort inPort = msg.getMatch().get(MatchField.IN_PORT);
+		log.info("FLOW REMOVED MESSAGE FOUND"); 
 		if(msg.getCookie().getValue() == COOKIE){
 			MacAddress realAddress = userMap.get(sw).get(inPort);
 			User user = new User(realAddress,inPort,sw);
@@ -89,6 +95,7 @@ public class MacAuthenticator implements Authenticator {
 	}
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
+		log.info("GOT A PACKET");
 		OFType type = msg.getType();
 		if(type.equals(OFType.PACKET_IN)){
 			return handlePacketInMessage(sw,(OFPacketIn)msg,cntx);
@@ -162,5 +169,27 @@ public class MacAuthenticator implements Authenticator {
 		fmb.setActions(actionList);
 		sw.write(fmb.build());
 	}
+	private Match createArpMatch(IOFSwitch sw){
+		OFFactory factory = sw.getOFFactory();
+		return factory.buildMatch().setExact(MatchField.ETH_DST,MacAddress.BROADCAST)
+			.setExact(MatchField.ETH_TYPE,EthType.ARP)
+			.setExact(MatchField.ARP_OP,ArpOpcode.REQUEST)
+			.build();
+	}
+	private void writeArpFlow(IOFSwitch sw,Match match){
+		OFActions actions = sw.getOFFactory().actions();
+		List<OFAction> actionList = new ArrayList<>();
+		OFAction controllerAction = actions.buildOutput().setPort(OFPort.CONTROLLER).setMaxLen(10000).build();
+		OFFlowMod.Builder fmb = sw.getOFFactory().buildFlowAdd();
+		fmb.setMatch(match);
+		fmb.setCookie(U64.of(COOKIE));
+		fmb.setIdleTimeout(0);
+		fmb.setHardTimeout(0);
+		fmb.setPriority(20000);
+		fmb.setBufferId(OFBufferId.NO_BUFFER);
+		fmb.setActions(actionList);
+		sw.write(fmb.build());
+	}
+		
 }
 
