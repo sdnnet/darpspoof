@@ -19,6 +19,8 @@ import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.ArpOpcode;
 import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.IPAddress;
+import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFBufferId;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -33,40 +35,43 @@ import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
 
-public class MacAuthenticator implements Authenticator<MacAddress> {
+public class IPAuthenticator implements Authenticator<IPv4Address> {
 	private static final long COOKIE = 135719;
-	protected static Logger log = LoggerFactory.getLogger(MacAuthenticator.class);
+	protected static Logger log = LoggerFactory.getLogger(IPAuthenticator.class);
 
 	protected IFloodlightProviderService floodlightProvider;
-	protected HashSet<User<MacAddress>> userRecord;
-	protected HashSet<User<MacAddress>> maliciousUsers;
-	protected HashMap<IOFSwitch,HashMap<OFPort,MacAddress>> userMap;
-	public MacAuthenticator(IFloodlightProviderService service){
+	protected HashSet<User<IPv4Address>> userRecord;
+	protected HashSet<User<IPv4Address>> maliciousUsers;
+	protected HashMap<IOFSwitch,HashMap<OFPort,IPv4Address>> userMap;
+	public IPAuthenticator(IFloodlightProviderService service){
 		this.floodlightProvider = service;
 		userRecord = new HashSet<>();
 		userMap = new HashMap<>();
+		maliciousUsers =  new HashSet<>();
 	}
 	private Command handlePacketInMessage(IOFSwitch sw,OFPacketIn pi,FloodlightContext cntx){
 		OFPort inPort = (pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort() : pi.getMatch().get(MatchField.IN_PORT));
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
 		EthType etherType = eth.getEtherType();
-		MacAddress senderAddress = eth.getSourceMACAddress();
-		HashMap<OFPort,MacAddress> record = userMap.get(sw);
-		if(record==null){
-			userMap.put(sw,new HashMap<>());
-			record = userMap.get(sw);
+		if(etherType.equals(EthType.ARP)){
+			HashMap<OFPort,IPv4Address> record = userMap.get(sw);
+			IPv4Address senderAddress = ((ARP)eth.getPayload()).getSenderProtocolAddress();
+			if(record==null){
+				userMap.put(sw,new HashMap<>());
+				record = userMap.get(sw);
+			}
+			IPv4Address realAddress = record.get(inPort);
+			if(realAddress==null){
+				User<IPv4Address> user = new User<>(senderAddress,inPort,sw);
+				this.registerUser(user);
+			}
+			else if(!realAddress.equals(senderAddress)){
+				log.info("Not a legal user");
+				this.registerAsMalicious(new User<>(senderAddress,inPort,sw));
+			}
+			log.info("real address: {}",realAddress);
+			log.info("sender address: {}" ,senderAddress);
 		}
-		MacAddress realAddress = record.get(inPort);
-		if(realAddress==null){
-			User<MacAddress> user = new User<>(senderAddress,inPort,sw);
-			this.registerUser(user);
-		}
-		else if(!realAddress.equals(senderAddress)){
-			log.info("Not a legal user");
-			this.registerAsMalicious(new User<>(senderAddress,inPort,sw));
-		}
-		log.info("real address: {}",realAddress);
-		log.info("sender address: {}" ,senderAddress);
 		return Command.CONTINUE;
 	}
 	private Command handleFlowRemoved(IOFSwitch sw,OFFlowRemoved msg,FloodlightContext cntx){
@@ -121,36 +126,36 @@ public class MacAuthenticator implements Authenticator<MacAddress> {
 	}
 
 	@Override
-	public void registerUser(User<MacAddress> user) {
-		HashMap<OFPort,MacAddress> record = userMap.get(user.getConnectedSwitch());
+	public void registerUser(User<IPv4Address> user) {
+		HashMap<OFPort,IPv4Address> record = userMap.get(user.getConnectedSwitch());
 		record.put(user.getPort(),user.getAddress());
 	}
 
 	@Override
-	public void removeUser(User<MacAddress> user) {
-		HashMap<OFPort,MacAddress> record = userMap.get(user.getConnectedSwitch());
+	public void removeUser(User<IPv4Address> user) {
+		HashMap<OFPort,IPv4Address> record = userMap.get(user.getConnectedSwitch());
 		record.remove(user.getPort());
 		userRecord.remove(user);
 	}
 
 	@Override
-	public void registerAsMalicious(User<MacAddress> user) {
+	public void registerAsMalicious(User<IPv4Address> user) {
 		maliciousUsers.add(user);	
 		Match match = createMatch(user);
 		writeBlockFlow(user.getConnectedSwitch(),match);
 	}
 
 	@Override
-	public void removeAsMalicious(User<MacAddress> user) {
+	public void removeAsMalicious(User<IPv4Address> user) {
 		maliciousUsers.remove(user);
 		unblockMaliciousUser(user);
 	}
 
 	@Override
-	public void unblockMaliciousUser(User<MacAddress> user) {
+	public void unblockMaliciousUser(User<IPv4Address> user) {
 
 	}
-	private Match createMatch(User<MacAddress> user){
+	private Match createMatch(User<IPv4Address> user){
 		IOFSwitch sw = user.getConnectedSwitch();
 		OFFactory factory = sw.getOFFactory();
 		return factory.buildMatch().setExact(MatchField.IN_PORT,user.getPort()).build();

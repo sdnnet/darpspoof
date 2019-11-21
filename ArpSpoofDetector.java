@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Map;
 
 import org.projectfloodlight.openflow.protocol.OFType;
+import org.projectfloodlight.openflow.types.IPv4Address;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,7 +19,7 @@ public class ArpSpoofDetector implements IFloodlightModule {
 	protected static Logger log = LoggerFactory.getLogger(ArpSpoofDetector.class);
 	protected IFloodlightProviderService floodlightProviderService;
 	protected IOFSwitchService switchService;
-	private Authenticator authenticator;
+	private Authenticator<IPv4Address> authenticator;
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
 		// TODO Auto-generated method stub
@@ -43,7 +44,7 @@ public class ArpSpoofDetector implements IFloodlightModule {
 		// TODO Auto-generated method stub
 		floodlightProviderService = context.getServiceImpl(IFloodlightProviderService.class);
 		switchService = context.getServiceImpl(IOFSwitchService.class);
-		authenticator = new MacAuthenticator(floodlightProviderService);
+		authenticator = new IPAuthenticator(floodlightProviderService);
 	}
 
 	@Override

@@ -2,10 +2,10 @@ package net.floodlightcontroller.sdn_arp_spoof_detection;
 
 import net.floodlightcontroller.core.IOFMessageListener;
 
-public interface Authenticator extends  IOFMessageListener{
-	void registerUser(User user);
-	void removeUser(User user);
-	void registerAsMalicious(User user);
-	void removeAsMalicious(User user);
-	void unblockMaliciousUser(User user);
+public interface Authenticator<T> extends  IOFMessageListener{
+	void registerUser(User<T> user);
+	void removeUser(User<T> user);
+	void registerAsMalicious(User<T> user);
+	void removeAsMalicious(User<T> user);
+	void unblockMaliciousUser(User<T> user);
 }
