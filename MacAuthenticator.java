@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IListener.Command;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
@@ -100,7 +101,8 @@ public class MacAuthenticator implements Authenticator {
 		if(type.equals(OFType.PACKET_IN)){
 			return handlePacketInMessage(sw,(OFPacketIn)msg,cntx);
 		}else if(type.equals(OFType.FLOW_REMOVED)){
-			return handleFlowRemoved(sw,(OFFlowRemoved)msg,cntx);
+			//return handleFlowRemoved(sw,(OFFlowRemoved)msg,cntx);
+			return Command.CONTINUE;
 		}else{
 			log.info("Recieved wrong packet");
 			return Command.CONTINUE;
@@ -119,7 +121,7 @@ public class MacAuthenticator implements Authenticator {
 
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		return name.equals("Forwarding");
+		return name.equals("Learning Switch");
 	}
 
 	@Override
@@ -159,14 +161,15 @@ public class MacAuthenticator implements Authenticator {
 	}
 	private void writeBlockFlow(IOFSwitch sw,Match match){
 		List<OFAction> actionList = new ArrayList<>();
-		OFFlowMod.Builder fmb = sw.getOFFactory().buildFlowAdd();
-		fmb.setMatch(match);
-		fmb.setCookie(U64.of(COOKIE));
-		fmb.setIdleTimeout(10);
-		fmb.setHardTimeout(10);
-		fmb.setPriority(20000);
-		fmb.setBufferId(OFBufferId.NO_BUFFER);
-		fmb.setActions(actionList);
+		OFFlowMod.Builder fmb = sw.getOFFactory().buildFlowAdd()
+		.setMatch(match)
+		.setCookie(U64.of(COOKIE))
+		.setIdleTimeout(10)
+		.setHardTimeout(10)
+		.setPriority(20000)
+		.setBufferId(OFBufferId.NO_BUFFER)
+		.setActions(actionList)
+		.setPriority(3);
 		sw.write(fmb.build());
 	}
 	private Match createArpMatch(IOFSwitch sw){
