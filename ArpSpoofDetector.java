@@ -50,8 +50,9 @@ public class ArpSpoofDetector implements IFloodlightModule {
 	@Override
 	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
 		// TODO Auto-generated method stub
-		floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, authenticator);
 		floodlightProviderService.addOFMessageListener(OFType.FLOW_REMOVED, authenticator);
+		floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, authenticator);
+		floodlightProviderService.addOFMessageListener(OFType.ERROR, authenticator);
 	}
 
 }

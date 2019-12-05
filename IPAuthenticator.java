@@ -58,6 +58,7 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 		if(etherType.equals(EthType.ARP)){
 			HashMap<OFPort,IPv4Address> record = userMap.get(sw);
 			IPv4Address senderAddress = ((ARP)eth.getPayload()).getSenderProtocolAddress();
+			if(senderAddress.equals(IPv4Address.of("0.0.0.0"))) return Command.CONTINUE;
 			if(record==null){
 				userMap.put(sw,new HashMap<>());
 				record = userMap.get(sw);
@@ -69,6 +70,8 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 			}
 			else if(!realAddress.equals(senderAddress)){
 				log.info("Not a legal user");
+				log.info("real address: {}",realAddress);
+				log.info("sender address: {}" ,senderAddress);
 				this.registerAsMalicious(new User<>(senderAddress,inPort,sw));
 				return Command.STOP;
 			}
@@ -77,6 +80,7 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 		}else if(etherType.equals(EthType.IPv4)){
 			HashMap<OFPort,IPv4Address> record = userMap.get(sw);
 			IPv4Address senderAddress = ((IPv4)eth.getPayload()).getSourceAddress();
+			if(senderAddress.equals(IPv4Address.of("0.0.0.0"))) return Command.CONTINUE;
 			if(record==null){
 				userMap.put(sw,new HashMap<>());
 				record = userMap.get(sw);
@@ -89,6 +93,8 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 			else if(!realAddress.equals(senderAddress)){
 				log.info("Not a legal user");
 				this.registerAsMalicious(new User<>(senderAddress,inPort,sw));
+				log.info("real address: {}",realAddress);
+				log.info("sender address: {}" ,senderAddress);
 				return Command.STOP;
 			}
 			log.info("real address: {}",realAddress);
@@ -97,33 +103,33 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 		return Command.CONTINUE;
 	}
 	private Command handleFlowRemoved(IOFSwitch sw,OFFlowRemoved msg,FloodlightContext cntx){
-		/*
 		OFPort inPort = msg.getMatch().get(MatchField.IN_PORT);
 		log.info("FLOW REMOVED MESSAGE FOUND"); 
 		if(msg.getCookie().getValue() == COOKIE){
-			MacAddress realAddress = userMap.get(sw).get(inPort);
-			User user = new User(realAddress,inPort,sw);
+			IPv4Address realAddress = userMap.get(sw).get(inPort);
+			User<IPv4Address> user = new User<>(realAddress,inPort,sw);
 			removeAsMalicious(user);
 		}else{
 			if(msg.getReason().equals(OFFlowRemovedReason.IDLE_TIMEOUT)){
-				MacAddress realAddress = userMap.get(sw).get(inPort);
-				User user = new User(realAddress,inPort,sw);
+				IPv4Address realAddress = userMap.get(sw).get(inPort);
+				log.info("THIS IS A REMOVED FLOW");
+				User<IPv4Address> user = new User<>(realAddress,inPort,sw);
 				if(maliciousUsers.contains(user)){
 					removeAsMalicious(user);
 				}
 				removeUser(user);
 			}
 		}
-		*/
 		return Command.CONTINUE;
 	}
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-		log.info("GOT A PACKET");
 		OFType type = msg.getType();
+		log.info("TYPE: {}",type);
 		if(type.equals(OFType.PACKET_IN)){
 			return handlePacketInMessage(sw,(OFPacketIn)msg,cntx);
 		}else if(type.equals(OFType.FLOW_REMOVED)){
+			log.info("GOT A FLOW REMOVED PACKET");
 			return handleFlowRemoved(sw,(OFFlowRemoved)msg,cntx);
 		}else{
 			log.info("Recieved wrong packet");
@@ -143,7 +149,7 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		return name.equals("Learning Switch");
+		return true;
 	}
 
 	@Override
