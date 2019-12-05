@@ -11,6 +11,7 @@ import org.projectfloodlight.openflow.protocol.OFFlowRemoved;
 import org.projectfloodlight.openflow.protocol.OFFlowRemovedReason;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFPortDesc;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
@@ -34,6 +35,7 @@ import net.floodlightcontroller.core.IListener.Command;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.IPv4;
 
 public class IPAuthenticator implements Authenticator<IPv4Address> {
 	private static final long COOKIE = 135719;
@@ -68,6 +70,26 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 			else if(!realAddress.equals(senderAddress)){
 				log.info("Not a legal user");
 				this.registerAsMalicious(new User<>(senderAddress,inPort,sw));
+				return Command.STOP;
+			}
+			log.info("real address: {}",realAddress);
+			log.info("sender address: {}" ,senderAddress);
+		}else if(etherType.equals(EthType.IPv4)){
+			HashMap<OFPort,IPv4Address> record = userMap.get(sw);
+			IPv4Address senderAddress = ((IPv4)eth.getPayload()).getSourceAddress();
+			if(record==null){
+				userMap.put(sw,new HashMap<>());
+				record = userMap.get(sw);
+			}
+			IPv4Address realAddress = record.get(inPort);
+			if(realAddress==null){
+				User<IPv4Address> user = new User<>(senderAddress,inPort,sw);
+				this.registerUser(user);
+			}
+			else if(!realAddress.equals(senderAddress)){
+				log.info("Not a legal user");
+				this.registerAsMalicious(new User<>(senderAddress,inPort,sw));
+				return Command.STOP;
 			}
 			log.info("real address: {}",realAddress);
 			log.info("sender address: {}" ,senderAddress);
@@ -102,8 +124,7 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 		if(type.equals(OFType.PACKET_IN)){
 			return handlePacketInMessage(sw,(OFPacketIn)msg,cntx);
 		}else if(type.equals(OFType.FLOW_REMOVED)){
-			//return handleFlowRemoved(sw,(OFFlowRemoved)msg,cntx);
-			return Command.CONTINUE;
+			return handleFlowRemoved(sw,(OFFlowRemoved)msg,cntx);
 		}else{
 			log.info("Recieved wrong packet");
 			return Command.CONTINUE;
@@ -173,6 +194,7 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 		.setPriority(3);
 		sw.write(fmb.build());
 	}
+	/*
 	private Match createArpMatch(IOFSwitch sw){
 		OFFactory factory = sw.getOFFactory();
 		return factory.buildMatch().setExact(MatchField.ETH_DST,MacAddress.BROADCAST)
@@ -194,6 +216,6 @@ public class IPAuthenticator implements Authenticator<IPv4Address> {
 		fmb.setActions(actionList);
 		sw.write(fmb.build());
 	}
-		
+	*/	
 }
 
