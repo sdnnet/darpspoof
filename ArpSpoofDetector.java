@@ -16,9 +16,7 @@ import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 
 public class ArpSpoofDetector implements IFloodlightModule {
-	protected static Logger log = LoggerFactory.getLogger(ArpSpoofDetector.class);
 	protected IFloodlightProviderService floodlightProviderService;
-	protected IOFSwitchService switchService;
 	private Authenticator<IPv4Address> authenticator;
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
@@ -43,7 +41,6 @@ public class ArpSpoofDetector implements IFloodlightModule {
 	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
 		// TODO Auto-generated method stub
 		floodlightProviderService = context.getServiceImpl(IFloodlightProviderService.class);
-		switchService = context.getServiceImpl(IOFSwitchService.class);
 		authenticator = new IPAuthenticator(floodlightProviderService);
 	}
 
