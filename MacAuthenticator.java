@@ -14,11 +14,8 @@ import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
-import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
-import org.projectfloodlight.openflow.types.ArpOpcode;
-import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFBufferId;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -28,9 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
-import net.floodlightcontroller.core.IListener.Command;
 import net.floodlightcontroller.core.IOFSwitch;
-import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
 
 public class MacAuthenticator implements Authenticator<MacAddress> {
@@ -49,7 +44,6 @@ public class MacAuthenticator implements Authenticator<MacAddress> {
 	private Command handlePacketInMessage(IOFSwitch sw,OFPacketIn pi,FloodlightContext cntx){
 		OFPort inPort = (pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort() : pi.getMatch().get(MatchField.IN_PORT));
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
-		EthType etherType = eth.getEtherType();
 		MacAddress senderAddress = eth.getSourceMACAddress();
 		HashMap<OFPort,MacAddress> record = userMap.get(sw);
 		if(record==null){
@@ -70,24 +64,24 @@ public class MacAuthenticator implements Authenticator<MacAddress> {
 		return Command.CONTINUE;
 	}
 	private Command handleFlowRemoved(IOFSwitch sw,OFFlowRemoved msg,FloodlightContext cntx){
-		/*
+		
 		OFPort inPort = msg.getMatch().get(MatchField.IN_PORT);
 		log.info("FLOW REMOVED MESSAGE FOUND"); 
 		if(msg.getCookie().getValue() == COOKIE){
 			MacAddress realAddress = userMap.get(sw).get(inPort);
-			User user = new User(realAddress,inPort,sw);
+			User<MacAddress> user = new User<>(realAddress,inPort,sw);
 			removeAsMalicious(user);
 		}else{
 			if(msg.getReason().equals(OFFlowRemovedReason.IDLE_TIMEOUT)){
 				MacAddress realAddress = userMap.get(sw).get(inPort);
-				User user = new User(realAddress,inPort,sw);
+				User<MacAddress> user = new User<>(realAddress,inPort,sw);
 				if(maliciousUsers.contains(user)){
 					removeAsMalicious(user);
 				}
 				removeUser(user);
 			}
 		}
-		*/
+		
 		return Command.CONTINUE;
 	}
 	@Override
@@ -97,8 +91,7 @@ public class MacAuthenticator implements Authenticator<MacAddress> {
 		if(type.equals(OFType.PACKET_IN)){
 			return handlePacketInMessage(sw,(OFPacketIn)msg,cntx);
 		}else if(type.equals(OFType.FLOW_REMOVED)){
-			//return handleFlowRemoved(sw,(OFFlowRemoved)msg,cntx);
-			return Command.CONTINUE;
+			return handleFlowRemoved(sw,(OFFlowRemoved)msg,cntx);
 		}else{
 			log.info("Recieved wrong packet");
 			return Command.CONTINUE;
@@ -168,6 +161,7 @@ public class MacAuthenticator implements Authenticator<MacAddress> {
 		.setPriority(3);
 		sw.write(fmb.build());
 	}
+	/*
 	private Match createArpMatch(IOFSwitch sw){
 		OFFactory factory = sw.getOFFactory();
 		return factory.buildMatch().setExact(MatchField.ETH_DST,MacAddress.BROADCAST)
@@ -188,7 +182,7 @@ public class MacAuthenticator implements Authenticator<MacAddress> {
 		fmb.setBufferId(OFBufferId.NO_BUFFER);
 		fmb.setActions(actionList);
 		sw.write(fmb.build());
-	}
+	}*/
 		
 }
 
