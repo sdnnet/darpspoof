@@ -31,12 +31,14 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.DHCP;
 import net.floodlightcontroller.packet.Ethernet;
-
+import net.floodlightcontroller.restserver.IRestApiService;
+import net.floodlightcontroller.sdn_arp_spoof_detection.web.*;
 import java.util.HashMap;
 
 import net.floodlightcontroller.dhcpserver.*;
-public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener {
+public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IArpAuthenticatorService{
 	protected static Logger log = LoggerFactory.getLogger(ArpAuthenticator.class);
+	protected IRestApiService restApiService;
 	protected IFloodlightProviderService floodlightProviderService;
 	protected HashMap<IOFSwitch,HashMap<OFPort,IPv4Address>> ipPortMap;
 	protected HashMap<IPv4Address,IOFSwitch> ipSwitchMap;
@@ -115,7 +117,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener {
 			ARP arp = (ARP) eth.getPayload();
 			IPv4Address addr = arp.getSenderProtocolAddress();
 			IOFSwitch actSwitch = ipSwitchMap.get(addr);
-
+			if(addr.equals(IPv4Address.of("0.0.0.0"))) return Command.CONTINUE;
 			if(actSwitch == null){
 				ipSwitchMap.put(addr,sw);
 				actSwitch = sw;
@@ -123,6 +125,8 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener {
 			}else{
 				if(actSwitch != sw) return Command.CONTINUE;
 				IPv4Address realAddr = actMap.get(inPort);
+				log.info("got arp from : {}",addr);
+				log.info("got arp to : {}",arp.getTargetProtocolAddress());
 				if(!realAddr.equals(addr)){
 					block(inPort,sw,addr);
 					return Command.STOP;
@@ -140,6 +144,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener {
 			}else if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.REQUEST)){
 				IPv4Address addr = payload.getClientIPAddress();
 				if(!ipSwitchMap.containsKey(addr)){
+					log.info("registering....");
 					ipSwitchMap.put(addr,sw);
 					actMap.put(inPort,addr);
 				}
@@ -157,25 +162,34 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener {
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
 		// TODO Auto-generated method stub
-		return null;
+		Collection<Class<? extends IFloodlightService>> l  = new ArrayList<>();
+		l.add(IArpAuthenticatorService.class);
+		return l;
 	}
 
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
 		// TODO Auto-generated method stub
-		return null;
+		Map<Class<? extends IFloodlightService>,IFloodlightService> m  = new HashMap<>();
+		m.put(IArpAuthenticatorService.class,this);
+		return m;
 	}
+
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
 		// TODO Auto-generated method stub
-		return null;
+		Collection<Class<? extends IFloodlightService>> l =new ArrayList<Class<? extends IFloodlightService>>();
+		l.add(IRestApiService.class);
+		l.add(IFloodlightProviderService.class);
+		return l;
 	}
 
 	@Override
 	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
 		// TODO Auto-generated method stub
 		floodlightProviderService = context.getServiceImpl(IFloodlightProviderService.class);
+		restApiService = context.getServiceImpl(IRestApiService.class);
 		ipPortMap = new HashMap<>();
 		ipSwitchMap = new HashMap<>();
 		blockedMap = new HashMap<>();
@@ -185,6 +199,12 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener {
 	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
 		// TODO Auto-generated method stub
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, this);
+		restApiService.addRestletRoutable(new ArpAuthenticatorWebRoutable());
+	}
 
+	@Override
+	public HashMap<IOFSwitch, HashMap<OFPort, IPv4Address>> getArpMap() {
+		// TODO Auto-generated method stub
+		return ipPortMap;
 	}
 }
