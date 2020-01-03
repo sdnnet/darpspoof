@@ -33,7 +33,7 @@ public class ArpJsonSerializer extends JsonSerializer<ArpJsonMap> {
 				if(inMap.keySet() != null){
 					for(OFPort port : inMap.keySet()){
 						gen.writeStartObject();
-						gen.writeStringField(port.toString(),inMap.get(port).toString()+"\n");
+						gen.writeStringField(port.toString(),inMap.get(port).toString());
 						gen.writeEndObject();
 					}
 				}
