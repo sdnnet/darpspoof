@@ -44,25 +44,34 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	protected static Logger log = LoggerFactory.getLogger(ArpAuthenticator.class);
 	protected IRestApiService restApiService;
 	protected IFloodlightProviderService floodlightProviderService;
+	//For <port-ip> mapping, mac is there for removing mac entry from macMap while unblocking in constant time
 	protected HashMap<IOFSwitch,HashMap<OFPort,IPMacPair>> switchMap;
+	//For <mac-<switch-port>> mapping so that we can reach to right switch using DHCPACK
 	protected HashMap<MacAddress,SwitchPortPair> macMap;
+
+
 	@Override
 	public String getName() {
-		// TODO Auto-generated method stub
-		return "SDN ARP detector";
+		return "ArpAuthenticator";
 	}
 
 	@Override
 	public boolean isCallbackOrderingPrereq(OFType type, String name) {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
+	//This module will get packet before forwarding module
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		// TODO Auto-generated method stub
-		return false;
+		return name.equals("forwarding");
 	}
+
+
+	/* Match used for unblocking purpose
+	 * ARP source protocol address is masked
+	 * for 0.0.0.0/0 i.e., any IP address
+	 * to delete all IP on a given port
+	 */
 	private Match createMatch(IOFSwitch sw,OFPort port){
 		OFFactory factory = sw.getOFFactory();
 		return factory.buildMatch().setExact(MatchField.IN_PORT,port)
@@ -70,6 +79,13 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 			.setMasked(MatchField.ARP_SPA,IPv4AddressWithMask.of("0.0.0.0/0"))
 			.build();
 	}
+
+
+
+	/* Match used for blocking purpose
+	 * To block ip address "addr" on 
+	 * OFPort "port"
+	 */
 	private Match createMatch(IOFSwitch sw,OFPort port,IPv4Address addr){
 		OFFactory factory = sw.getOFFactory();
 		return factory.buildMatch().setExact(MatchField.IN_PORT,port)
@@ -77,25 +93,43 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 			.setExact(MatchField.ARP_SPA,addr)
 			.build();
 	}
+
+
+
+
+	/* Write block flow for unlimited time
+	 * on basis of block match
+	 */
 	private void writeBlockFlow(Match m,IOFSwitch sw){
 		OFFactory factory = sw.getOFFactory();
 		ArrayList<OFAction> actions = new ArrayList<>();
 		OFFlowAdd flow =factory.buildFlowAdd().setMatch(m).setHardTimeout(0).setIdleTimeout(0).setPriority(1000).setActions(actions).build();
 		sw.write(flow);
 	}
+
+
+	/* Write unblock flow i.e., delete block flow
+	 * on basis on unblock match
+	 */
 	private void writeUnblockFlow(IOFSwitch sw,Match m){
 		OFFactory factory = sw.getOFFactory();
 		OFFlowDelete flow =factory.buildFlowDelete().setMatch(m).build();
 		sw.write(flow);
 	}
+
+
 	private void unblockIfMalicious(IOFSwitch sw,OFPort port){
 		Match m = createMatch(sw,port);
 		writeUnblockFlow(sw,m);
 	}
+
+
 	private void block(OFPort port,IOFSwitch sw,IPv4Address addr){
 		Match m = createMatch(sw,port,addr);
 		writeBlockFlow(m,sw);
 	}
+
+	// handles both ARP and DHCP
 	protected Command handlePacketInMessage(IOFSwitch sw,OFPacketIn pi,FloodlightContext cntx){
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
 		OFPort inPort = (pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort()
@@ -105,6 +139,15 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 			actMap = new HashMap<>();
 			switchMap.put(sw,actMap); 
 		}
+		/* if we get arp from unregistered port of switch
+		 * it means that arp is verified by any other switch 
+		 * previously so, not checking that case.
+		 * (As it will be switch connection link that's why
+		 * it is not registered)
+		 *
+		 * If we get different arp source protocol address
+		 * as registered than block that flow
+		 */
 		if(eth.getEtherType().equals(EthType.ARP)){
 			ARP arp = (ARP) eth.getPayload();
 			IPv4Address addr = arp.getSenderProtocolAddress();
@@ -115,7 +158,19 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 					return Command.STOP;
 				}
 			}
-		} else if(DHCPServerUtils.isDHCPPacketIn(eth)){
+		} 
+
+		/* if we get a dhcp request from a port it means a 
+		 * new device is connected to that port.
+		 * So, remove any entry from data-structure and 
+		 * flow rules from switch for that port(if any)
+		 *
+		 * if we get a dhcp ack (which can be sent by
+		 * any dhcpserver machine or VM as it is a packet
+		 * in message) so handle it by registration of
+		 * IP address
+		 */
+		else if(DHCPServerUtils.isDHCPPacketIn(eth)){
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.REQUEST)){
 				if(actMap.containsKey(inPort)){
@@ -132,6 +187,15 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		}
 		return Command.CONTINUE;
 	}
+
+
+
+	/* registers the new IP address in switchMap.
+	 * It gets the required switch and port for 
+	 * registration using macMap.
+	 * macMap entry itself was added while handling 
+	 * DHCPRequest previously.
+	 */
 	private void handleDHCPACK(Ethernet eth,DHCP payload){
 		SwitchPortPair pair = macMap.get(eth.getDestinationMACAddress());
 		IPMacPair iPair = new IPMacPair(payload.getYourIPAddress(),eth.getDestinationMACAddress());
@@ -142,6 +206,12 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		}
 		innerMap.put(pair.getPort(),iPair);
 	}
+
+
+	/* handles DHCPACK by controller
+	 * as if controller generates ack 
+	 * it will be a packet-out message
+	 */
 	private Command handlePacketOutMessage(IOFSwitch sw,OFPacketOut pi,FloodlightContext cntx){
 		Ethernet eth = new Ethernet();
 		eth = (Ethernet) eth.deserialize(pi.getData(),0,pi.getData().length);
@@ -154,34 +224,40 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		return Command.CONTINUE;
 
 	}
+
+
+
+	/* handles both PacketIn and PacketOut message
+	 * as PacketOut message can also have DHCPACK
+	 * when controllers act as DHCP server
+	 */
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-		// TODO Auto-generated method stub
 		if(msg.getType().equals(OFType.PACKET_IN)) return handlePacketInMessage(sw,(OFPacketIn) msg,cntx);
 		else if(msg.getType().equals(OFType.PACKET_OUT)) return handlePacketOutMessage(sw,(OFPacketOut)msg,cntx);
 		return Command.CONTINUE;
 	}
 
+
+
+	//Expose REST API service 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-		// TODO Auto-generated method stub
 		Collection<Class<? extends IFloodlightService>> l  = new ArrayList<>();
 		l.add(IArpAuthenticatorService.class);
 		return l;
 	}
 
+
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-		// TODO Auto-generated method stub
 		Map<Class<? extends IFloodlightService>,IFloodlightService> m  = new HashMap<>();
 		m.put(IArpAuthenticatorService.class,this);
 		return m;
 	}
 
-
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
-		// TODO Auto-generated method stub
 		Collection<Class<? extends IFloodlightService>> l =new ArrayList<Class<? extends IFloodlightService>>();
 		l.add(IRestApiService.class);
 		l.add(IFloodlightProviderService.class);
@@ -190,7 +266,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 	@Override
 	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
-		// TODO Auto-generated method stub
 		floodlightProviderService = context.getServiceImpl(IFloodlightProviderService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		macMap = new HashMap<>();
@@ -199,7 +274,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 	@Override
 	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
-		// TODO Auto-generated method stub
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, this);
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_OUT, this);
 		restApiService.addRestletRoutable(new ArpAuthenticatorWebRoutable());
@@ -207,7 +281,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 	@Override
 	public HashMap<IOFSwitch, HashMap<OFPort, IPMacPair>> getArpMap() {
-		// TODO Auto-generated method stub
 		return switchMap;
 	}
 

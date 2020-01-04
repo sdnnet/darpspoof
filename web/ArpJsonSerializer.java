@@ -16,9 +16,12 @@ import net.floodlightcontroller.sdn_arp_spoof_detection.*;
 
 public class ArpJsonSerializer extends JsonSerializer<ArpJsonMap> {
 
+	/* Write Output in form of:
+	 * 	switch{[{port,ip},....]} , ....
+	 * 	json serialization
+	 */
 	@Override
-	public void serialize(ArpJsonMap jmap, JsonGenerator gen, SerializerProvider serial)			throws IOException, JsonProcessingException {
-		// TODO Auto-generated method stub
+	public void serialize(ArpJsonMap jmap, JsonGenerator gen, SerializerProvider serial) throws IOException, JsonProcessingException {
 		gen.configure(Feature.WRITE_NUMBERS_AS_STRINGS,true);
 		if(jmap == null){
 			gen.writeStartObject();
