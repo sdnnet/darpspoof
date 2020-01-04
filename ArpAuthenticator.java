@@ -43,6 +43,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	protected HashMap<IOFSwitch,HashMap<OFPort,IPv4Address>> ipPortMap;
 	protected HashMap<IPv4Address,IOFSwitch> ipSwitchMap;
 	protected HashMap<IOFSwitch,HashMap<OFPort,ArrayList<IPv4Address>>> blockedMap;
+	protected HashMap<IOFSwitch,HashMap<OFPort,IPv4Address>> dhcpMap;
 	@Override
 	public String getName() {
 		// TODO Auto-generated method stub
@@ -127,6 +128,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 				IPv4Address realAddr = actMap.get(inPort);
 				log.info("got arp from : {}",addr);
 				log.info("got arp to : {}",arp.getTargetProtocolAddress());
+				if(addr.equals(arp.getTargetProtocolAddress())) return Command.CONTINUE;
 				if(!realAddr.equals(addr)){
 					block(inPort,sw,addr);
 					return Command.STOP;
@@ -136,12 +138,24 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.DISCOVER)){
 				IPv4Address addr = actMap.get(inPort);
-				if(addr!=null){
-					unblockIfMalicious(ipSwitchMap.get(addr),inPort);
-					ipSwitchMap.remove(addr);
-					actMap.remove(inPort);
+				if(addr!=null ){
+					HashMap<OFPort,IPv4Address> innerMap = dhcpMap.get(sw);
+					if(innerMap == null){
+						innerMap = new HashMap<>();
+						dhcpMap.put(sw,innerMap);
+					}
+					innerMap.put(inPort,addr);
 				}
 			}else if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.REQUEST)){
+				HashMap<OFPort,IPv4Address> innerMap = dhcpMap.get(sw);
+				if(innerMap!=null){
+					if(innerMap.containsKey(inPort)){
+						unblockIfMalicious(sw,inPort);
+						ipSwitchMap.remove(innerMap.get(inPort));
+						actMap.remove(inPort);
+						innerMap.remove(inPort);
+					}
+				}
 				IPv4Address addr = payload.getClientIPAddress();
 				if(!ipSwitchMap.containsKey(addr)){
 					log.info("registering....");
@@ -193,6 +207,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		ipPortMap = new HashMap<>();
 		ipSwitchMap = new HashMap<>();
 		blockedMap = new HashMap<>();
+		dhcpMap = new HashMap<>();
 	}
 
 	@Override
