@@ -109,17 +109,9 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		if(eth.getEtherType().equals(EthType.ARP)){
 			ARP arp = (ARP) eth.getPayload();
 			IPv4Address addr = arp.getSenderProtocolAddress();
-			IOFSwitch actSwitch = ipMap.get(addr);
 			if(addr.equals(IPv4Address.of("0.0.0.0"))) return Command.CONTINUE;
-			if(addr.equals(arp.getTargetProtocolAddress())) return Command.CONTINUE;
-			if(actSwitch == null){
-				block(inPort,sw,addr);
-				return Command.STOP;
-			}else{
-				log.info("to switch: {}   expected switch: {}",sw.getId(),actSwitch.getId());
-				if(!actSwitch.equals(sw)) return Command.CONTINUE;
-				IPv4Address realAddr = actMap.get(inPort).getIp();
-				if(!realAddr.equals(addr)){
+			if(actMap.containsKey(inPort)){
+				if(!addr.equals(actMap.get(inPort).getIp())){
 					block(inPort,sw,addr);
 					return Command.STOP;
 				}
