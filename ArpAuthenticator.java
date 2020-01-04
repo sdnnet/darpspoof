@@ -71,7 +71,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	private void writeBlockFlow(Match m,IOFSwitch sw){
 		OFFactory factory = sw.getOFFactory();
 		ArrayList<OFAction> actions = new ArrayList<>();
-		OFFlowAdd flow =factory.buildFlowAdd().setMatch(m).setHardTimeout(0).setIdleTimeout(0).setActions(actions).build();
+		OFFlowAdd flow =factory.buildFlowAdd().setMatch(m).setHardTimeout(0).setIdleTimeout(0).setPriority(1000).setActions(actions).build();
 		sw.write(flow);
 	}
 	private void writeUnblockFlow(IOFSwitch sw,Match m){
