@@ -127,17 +127,20 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 					macMap.put(eth.getSourceMACAddress(),new SwitchPortPair(sw,inPort));
 				}
 			}else if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.ACK)){
-				SwitchPortPair pair = macMap.get(eth.getDestinationMACAddress());
-				IPMacPair iPair = new IPMacPair(payload.getYourIPAddress(),eth.getDestinationMACAddress());
-				HashMap<OFPort,IPMacPair> innerMap = switchMap.get(pair.getSwitch());
-				if(innerMap == null){
-					innerMap = new HashMap<>();
-					switchMap.put(pair.getSwitch(),innerMap);
-				}
-				innerMap.put(pair.getPort(),iPair);
+				handleDHCPACK(eth,payload);
 			}
 		}
 		return Command.CONTINUE;
+	}
+	private void handleDHCPACK(Ethernet eth,DHCP payload){
+		SwitchPortPair pair = macMap.get(eth.getDestinationMACAddress());
+		IPMacPair iPair = new IPMacPair(payload.getYourIPAddress(),eth.getDestinationMACAddress());
+		HashMap<OFPort,IPMacPair> innerMap = switchMap.get(pair.getSwitch());
+		if(innerMap == null){
+			innerMap = new HashMap<>();
+			switchMap.put(pair.getSwitch(),innerMap);
+		}
+		innerMap.put(pair.getPort(),iPair);
 	}
 	private Command handlePacketOutMessage(IOFSwitch sw,OFPacketOut pi,FloodlightContext cntx){
 		Ethernet eth = new Ethernet();
@@ -145,14 +148,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		if(DHCPServerUtils.isDHCPPacketIn(eth)){
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.ACK)){
-				SwitchPortPair pair = macMap.get(eth.getDestinationMACAddress());
-				IPMacPair iPair = new IPMacPair(payload.getYourIPAddress(),eth.getDestinationMACAddress());
-				HashMap<OFPort,IPMacPair> innerMap = switchMap.get(pair.getSwitch());
-				if(innerMap == null){
-					innerMap = new HashMap<>();
-					switchMap.put(pair.getSwitch(),innerMap);
-				}
-				innerMap.put(pair.getPort(),iPair);
+				handleDHCPACK(eth,payload);
 			}
 		}
 		return Command.CONTINUE;
