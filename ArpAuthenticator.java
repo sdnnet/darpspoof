@@ -44,7 +44,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	protected static Logger log = LoggerFactory.getLogger(ArpAuthenticator.class);
 	protected IRestApiService restApiService;
 	protected IFloodlightProviderService floodlightProviderService;
-	protected HashMap<IPv4Address,IOFSwitch> ipMap;
 	protected HashMap<IOFSwitch,HashMap<OFPort,IPMacPair>> switchMap;
 	protected HashMap<MacAddress,SwitchPortPair> macMap;
 	@Override
@@ -122,7 +121,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 				if(actMap.containsKey(inPort)){
 					unblockIfMalicious(sw,inPort);
 					macMap.remove(actMap.get(inPort).getMac());
-					ipMap.remove(actMap.get(inPort).getIp());
 					actMap.remove(inPort);
 				}
 				if(!macMap.containsKey(eth.getSourceMACAddress())){
@@ -137,7 +135,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 					switchMap.put(pair.getSwitch(),innerMap);
 				}
 				innerMap.put(pair.getPort(),iPair);
-				ipMap.put(payload.getYourIPAddress(),pair.getSwitch());
 			}
 		}
 		return Command.CONTINUE;
@@ -156,7 +153,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 					switchMap.put(pair.getSwitch(),innerMap);
 				}
 				innerMap.put(pair.getPort(),iPair);
-				ipMap.put(payload.getYourIPAddress(),pair.getSwitch());
 			}
 		}
 		return Command.CONTINUE;
@@ -202,7 +198,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		floodlightProviderService = context.getServiceImpl(IFloodlightProviderService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		macMap = new HashMap<>();
-		ipMap = new HashMap<>();
 		switchMap = new HashMap<>();
 	}
 
@@ -220,9 +215,4 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		return switchMap;
 	}
 
-	@Override
-	public HashMap<IPv4Address, IOFSwitch> getIPMap() {
-		// TODO Auto-generated method stub
-		return ipMap;
-	}
 }
