@@ -4,11 +4,9 @@ This repository is a floodlight module that aims to detect and block any arp spo
 ## Installation Instructions
 
 ### Dependencies
-Oracle JDK 8
-
-Floodlight version >= 1.2
-
-git
+    Oracle JDK 8
+    Floodlight version >= 1.2
+    git
 
 
 ### Steps
@@ -18,7 +16,7 @@ git
 
 Follow floodlight tutorial to load a module to load ```sdn_arp_spoof_detection/ArpAuthenticator.java```
 
-### Using REST API
+## Using REST API
 
 This module also lets you to see the ip vs port mapping
 
