@@ -109,8 +109,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		if(eth.getEtherType().equals(EthType.ARP)){
 			ARP arp = (ARP) eth.getPayload();
 			IPv4Address addr = arp.getSenderProtocolAddress();
-			log.info("got arp from : {}",addr);
-			log.info("got arp to : {}",arp.getTargetProtocolAddress());
 			IOFSwitch actSwitch = ipMap.get(addr);
 			if(addr.equals(IPv4Address.of("0.0.0.0"))) return Command.CONTINUE;
 			if(addr.equals(arp.getTargetProtocolAddress())) return Command.CONTINUE;
@@ -118,7 +116,8 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 				block(inPort,sw,addr);
 				return Command.STOP;
 			}else{
-				if(actSwitch != sw) return Command.CONTINUE;
+				log.info("to switch: {}   expected switch: {}",sw.getId(),actSwitch.getId());
+				if(!actSwitch.equals(sw)) return Command.CONTINUE;
 				IPv4Address realAddr = actMap.get(inPort).getIp();
 				if(!realAddr.equals(addr)){
 					block(inPort,sw,addr);
@@ -127,7 +126,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 			}
 		} else if(DHCPServerUtils.isDHCPPacketIn(eth)){
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
-			log.info("your ip : {} with type: {}",payload.getClientIPAddress(),DHCPServerUtils.getMessageType(payload));
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.REQUEST)){
 				if(actMap.containsKey(inPort)){
 					unblockIfMalicious(sw,inPort);
@@ -157,7 +155,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		eth = (Ethernet) eth.deserialize(pi.getData(),0,pi.getData().length);
 		if(DHCPServerUtils.isDHCPPacketIn(eth)){
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
-			log.info("your ip : {} with type: {}",payload.getClientIPAddress(),DHCPServerUtils.getMessageType(payload));
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.ACK)){
 				SwitchPortPair pair = macMap.get(eth.getDestinationMACAddress());
 				IPMacPair iPair = new IPMacPair(payload.getYourIPAddress(),eth.getDestinationMACAddress());
@@ -229,5 +226,11 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	public HashMap<IOFSwitch, HashMap<OFPort, IPMacPair>> getArpMap() {
 		// TODO Auto-generated method stub
 		return switchMap;
+	}
+
+	@Override
+	public HashMap<IPv4Address, IOFSwitch> getIPMap() {
+		// TODO Auto-generated method stub
+		return ipMap;
 	}
 }

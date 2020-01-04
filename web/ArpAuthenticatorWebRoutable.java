@@ -13,6 +13,7 @@ public class ArpAuthenticatorWebRoutable implements RestletRoutable {
 		// TODO Auto-generated method stub
 		Router router = new Router(context);
 		router.attach("/list",ArpEntryResource.class);
+		router.attach("/ip",IPEntryResource.class);
 		return router;
 	}
 
