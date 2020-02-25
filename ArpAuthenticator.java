@@ -48,6 +48,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	protected HashMap<IOFSwitch,HashMap<OFPort,IPMacPair>> switchMap;
 	//For <mac-<switch-port>> mapping so that we can reach to right switch using DHCPACK
 	protected HashMap<MacAddress,SwitchPortPair> macMap;
+	protected ARPDHCP dhcp;
 
 
 	@Override
@@ -270,6 +271,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		macMap = new HashMap<>();
 		switchMap = new HashMap<>();
+		dhcp = new ARPDHCP(context);
 	}
 
 	@Override
