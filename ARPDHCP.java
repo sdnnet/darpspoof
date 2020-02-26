@@ -5,7 +5,6 @@ import net.floodlightcontroller.dhcpserver.DHCPInstance;
 import net.floodlightcontroller.dhcpserver.DHCPInstance.DHCPInstanceBuilder;
 import net.floodlightcontroller.dhcpserver.IDHCPService;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 
 import org.projectfloodlight.openflow.types.IPv4Address;
@@ -18,23 +17,22 @@ public class ARPDHCP {
 		service = context.getServiceImpl(IDHCPService.class);
 		buildDHCP();
 		service.addInstance(dList);
+		service.enableDHCP();
 	}
 	private void buildDHCP(){
 		HashSet<VlanVid> set = new HashSet<VlanVid>();
 		set.add(VlanVid.ofVlan(0));
 		set.add(VlanVid.ofVlan(1));
-		DHCPInstanceBuilder builder = new DHCPInstanceBuilder("vlan0").setEndIP(IPv4Address.of("10.0.0.254"))
-			.setLeaseTimeSec(200)
-			.setDNSServers(new ArrayList<>())
-			.setNTPServers(new ArrayList<>())
-			.setIPforwarding(true)
-			.setStartIP(IPv4Address.of("10.0.0.2"))
-			.setRouterIP(IPv4Address.of("10.0.0.3"))
-			.setServerID(IPv4Address.of("10.0.0.1"))
-			.setServerMac(MacAddress.of("00:11:22:33:44:55"))
-			.setDomainName("vlan0")
-			.setSubnetMask(IPv4Address.of("10.0.0.0/24"))
-			.setBroadcastIP(IPv4Address.of("10.0.0.255"))
+		DHCPInstanceBuilder builder = new DHCPInstanceBuilder("vlan0").setEndIP(IPv4Address.of("192.168.1.254"))
+			.setLeaseTimeSec(3600)
+			.setIPforwarding(false)
+			.setStartIP(IPv4Address.of("192.168.1.3"))
+			.setRouterIP(IPv4Address.of("192.168.1.1"))
+			.setServerID(IPv4Address.of("191.168.1.2"))
+			.setServerMac(MacAddress.of("00:00:00:00:00:0a"))
+			.setDomainName("local-domain")
+			.setSubnetMask(IPv4Address.of("255.255.255.0"))
+			.setBroadcastIP(IPv4Address.of("192.168.1.255"))
 			.setVlanMembers(set);
 		dList = builder.build();
 	}

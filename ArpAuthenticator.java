@@ -64,7 +64,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	//This module will get packet before forwarding module
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		return name.equals("forwarding");
+		return name.equals("forwarding")||name.equals("dhcpserver");
 	}
 
 
@@ -180,9 +180,11 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 					actMap.remove(inPort);
 				}
 				if(!macMap.containsKey(eth.getSourceMACAddress())){
+					log.info("GOT REQUEST: {}",eth.getSourceMACAddress());
 					macMap.put(eth.getSourceMACAddress(),new SwitchPortPair(sw,inPort));
 				}
 			}else if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.ACK)){
+				log.info("GOT ACK: {}",eth.getDestinationMACAddress());
 				handleDHCPACK(eth,payload);
 			}
 		}
