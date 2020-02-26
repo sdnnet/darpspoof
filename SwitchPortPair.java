@@ -1,13 +1,13 @@
 package net.floodlightcontroller.sdn_arp_spoof_detection;
 
+import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.OFPort;
 
-import net.floodlightcontroller.core.IOFSwitch;
 
 public class SwitchPortPair{
-	private IOFSwitch sw;
+	private DatapathId sw;
 	private OFPort port;
-	public SwitchPortPair(IOFSwitch sw,OFPort port){
+	public SwitchPortPair(DatapathId sw,OFPort port){
 		this.sw = sw;
 		this.port = port;
 	}
@@ -15,14 +15,14 @@ public class SwitchPortPair{
 	/**
 	 * @return the sw
 	 */
-	public IOFSwitch getSwitch() {
+	public DatapathId getSwitch() {
 		return sw;
 	}
 
 	/**
 	 * @param sw the sw to set
 	 */
-	public void setSwitch(IOFSwitch sw) {
+	public void setSwitch(DatapathId sw) {
 		this.sw = sw;
 	}
 

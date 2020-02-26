@@ -10,11 +10,13 @@ import org.projectfloodlight.openflow.protocol.OFFlowDelete;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFPacketOut;
+import org.projectfloodlight.openflow.protocol.OFPortDesc;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.IPv4AddressWithMask;
@@ -27,6 +29,9 @@ import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFMessageListener;
 import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.core.IOFSwitchListener;
+import net.floodlightcontroller.core.PortChangeType;
+import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
@@ -40,12 +45,13 @@ import net.floodlightcontroller.sdn_arp_spoof_detection.web.*;
 import java.util.HashMap;
 
 import net.floodlightcontroller.dhcpserver.*;
-public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IArpAuthenticatorService{
+public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IArpAuthenticatorService,IOFSwitchListener{
+	protected IOFSwitchService switchService;
 	protected static Logger log = LoggerFactory.getLogger(ArpAuthenticator.class);
 	protected IRestApiService restApiService;
 	protected IFloodlightProviderService floodlightProviderService;
 	//For <port-ip> mapping, mac is there for removing mac entry from macMap while unblocking in constant time
-	protected HashMap<IOFSwitch,HashMap<OFPort,IPMacPair>> switchMap;
+	protected HashMap<DatapathId,HashMap<OFPort,IPMacPair>> switchMap;
 	//For <mac-<switch-port>> mapping so that we can reach to right switch using DHCPACK
 	protected HashMap<MacAddress,SwitchPortPair> macMap;
 	protected ARPDHCP dhcp;
@@ -135,10 +141,10 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
 		OFPort inPort = (pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort()
 				: pi.getMatch().get(MatchField.IN_PORT));
-		HashMap<OFPort,IPMacPair> actMap = switchMap.get(sw);
+		HashMap<OFPort,IPMacPair> actMap = switchMap.get(sw.getId());
 		if(actMap == null){
 			actMap = new HashMap<>();
-			switchMap.put(sw,actMap); 
+			switchMap.put(sw.getId(),actMap); 
 		}
 		/* if we get arp from unregistered port of switch
 		 * it means that arp is verified by any other switch 
@@ -181,7 +187,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 				}
 				if(!macMap.containsKey(eth.getSourceMACAddress())){
 					log.info("GOT REQUEST: {}",eth.getSourceMACAddress());
-					macMap.put(eth.getSourceMACAddress(),new SwitchPortPair(sw,inPort));
+					macMap.put(eth.getSourceMACAddress(),new SwitchPortPair(sw.getId(),inPort));
 				}
 			}else if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.ACK)){
 				log.info("GOT ACK: {}",eth.getDestinationMACAddress());
@@ -271,6 +277,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
 		floodlightProviderService = context.getServiceImpl(IFloodlightProviderService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
+		switchService = context.getServiceImpl(IOFSwitchService.class);
 		macMap = new HashMap<>();
 		switchMap = new HashMap<>();
 		dhcp = new ARPDHCP(context);
@@ -281,11 +288,49 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, this);
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_OUT, this);
 		restApiService.addRestletRoutable(new ArpAuthenticatorWebRoutable());
+		switchService.addOFSwitchListener(this);
 	}
 
 	@Override
-	public HashMap<IOFSwitch, HashMap<OFPort, IPMacPair>> getArpMap() {
+	public HashMap<DatapathId, HashMap<OFPort, IPMacPair>> getArpMap() {
 		return switchMap;
+	}
+
+	@Override
+	public void switchAdded(DatapathId switchId) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void switchRemoved(DatapathId switchId) {
+		// TODO Auto-generated method stub
+		switchMap.remove(switchId);
+		macMap.entrySet().removeIf(entry->(entry.getValue().getSwitch().equals(switchId)));
+	}
+
+	@Override
+	public void switchActivated(DatapathId switchId) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void switchPortChanged(DatapathId switchId, OFPortDesc port, PortChangeType type) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void switchChanged(DatapathId switchId) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void switchDeactivated(DatapathId switchId) {
+		// TODO Auto-generated method stub
+
 	}
 
 }
