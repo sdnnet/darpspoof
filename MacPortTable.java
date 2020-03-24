@@ -2,19 +2,20 @@ package net.floodlightcontroller.sdn_arp_spoof_detection;
 
 import java.util.HashMap;
 
+import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.VlanVid;
 
 public class MacPortTable{
-	private HashMap<MacAddress,HashMap<VlanVid,OFPort>> map;
+	private HashMap<MacAddress,HashMap<VlanVid,SwitchPortPair>> map;
 	public boolean vidExists(MacAddress addr,VlanVid vid){
-		HashMap<VlanVid,OFPort> internalMap = map.get(addr);
+		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(addr);
 		if(internalMap == null) return false;
 		return internalMap.containsKey(vid);
 	}
 	public boolean removeVid(MacAddress addr,VlanVid vid){
-		HashMap<VlanVid,OFPort> internalMap = map.get(addr);
+		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(addr);
 		if(internalMap == null) return false;
 		if(!internalMap.containsKey(vid)) return false;
 		internalMap.remove(vid);
@@ -28,15 +29,15 @@ public class MacPortTable{
 		map.remove(addr);
 		return true;
 	}
-	public boolean addEntry(MacAddress addr,VlanVid vid,OFPort port){
-		HashMap<VlanVid,OFPort> internalMap = map.get(addr);
+	public boolean addEntry(MacAddress addr,VlanVid vid,DatapathId dpid,OFPort port){
+		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(addr);
 		if(internalMap == null){
 			map.put(addr,new HashMap<>());
 			internalMap = map.get(addr);
 		}
 		boolean exist = false;
 		if(internalMap.containsKey(vid)) exist = true;
-		internalMap.put(vid,port);
+		internalMap.put(vid,new SwitchPortPair(dpid,port));
 		return exist;
 	}
 }
