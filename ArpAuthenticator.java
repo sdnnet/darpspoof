@@ -22,6 +22,7 @@ import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.IPv4AddressWithMask;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.VlanVid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,8 +53,10 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	protected IFloodlightProviderService floodlightProviderService;
 	//For <port-ip> mapping, mac is there for removing mac entry from macMap while unblocking in constant time
 	protected HashMap<DatapathId,HashMap<OFPort,IPMacPair>> switchMap;
+	protected PortIPTable portIPMap;
 	//For <mac-<switch-port>> mapping so that we can reach to right switch using DHCPACK
 	protected HashMap<MacAddress,SwitchPortPair> macMap;
+	protected MacPortTable macPortTable;
 	protected ARPDHCP dhcp;
 
 
@@ -142,6 +145,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		OFPort inPort = (pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort()
 				: pi.getMatch().get(MatchField.IN_PORT));
 		HashMap<OFPort,IPMacPair> actMap = switchMap.get(sw.getId());
+		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
 		if(actMap == null){
 			actMap = new HashMap<>();
 			switchMap.put(sw.getId(),actMap); 
@@ -180,14 +184,15 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		else if(DHCPServerUtils.isDHCPPacketIn(eth)){
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.REQUEST)){
-				if(actMap.containsKey(inPort)){
-					unblockIfMalicious(sw,inPort);
-					macMap.remove(actMap.get(inPort).getMac());
-					actMap.remove(inPort);
+				if(portIPMap.vlanExists(sw.getId(),inPort,VlanVid.ofVlan(eth.getVlanID()))){
+					//unblockIfMalicious(sw,inPort);
+					MacAddress tmpMac = portIPMap.getMacForVlan(sw.getId(),inPort,vid);
+					portIPMap.remove(sw.getId(),inPort,VlanVid.ofVlan(eth.getVlanID()));
+					macPortTable.removeVid(tmpMac,vid);
 				}
-				if(!macMap.containsKey(eth.getSourceMACAddress())){
+				if(!macPortTable.vidExists(eth.getSourceMACAddress(),vid)){
 					log.info("GOT REQUEST: {}",eth.getSourceMACAddress());
-					macMap.put(eth.getSourceMACAddress(),new SwitchPortPair(sw.getId(),inPort));
+					macPortTable.addEntry(eth.getSourceMACAddress(),vid,sw.getId(),inPort);
 				}
 			}else if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.ACK)){
 				log.info("GOT ACK: {}",eth.getDestinationMACAddress());
@@ -206,14 +211,9 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	 * DHCPRequest previously.
 	 */
 	private void handleDHCPACK(Ethernet eth,DHCP payload){
-		SwitchPortPair pair = macMap.get(eth.getDestinationMACAddress());
-		IPMacPair iPair = new IPMacPair(payload.getYourIPAddress(),eth.getDestinationMACAddress());
-		HashMap<OFPort,IPMacPair> innerMap = switchMap.get(pair.getSwitch());
-		if(innerMap == null){
-			innerMap = new HashMap<>();
-			switchMap.put(pair.getSwitch(),innerMap);
-		}
-		innerMap.put(pair.getPort(),iPair);
+		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
+		SwitchPortPair pair = macPortTable.getPortForMac(eth.getDestinationMACAddress(),vid);
+		portIPMap.addEntry(pair.getSwitch(),pair.getPort(),new VlanIPPair(vid,payload.getYourIPAddress(),eth.getDestinationMACAddress()));
 	}
 
 
