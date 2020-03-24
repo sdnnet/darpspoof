@@ -29,6 +29,10 @@ public class MacPortTable{
 		map.remove(addr);
 		return true;
 	}
+	public SwitchPortPair getPortForMac(MacAddress mac,VlanVid vid){
+		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(mac);
+		return internalMap.get(vid);
+	}
 	public boolean addEntry(MacAddress addr,VlanVid vid,DatapathId dpid,OFPort port){
 		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(addr);
 		if(internalMap == null){
