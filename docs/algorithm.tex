@@ -1,0 +1,60 @@
+\documentclass{article}
+
+\usepackage[backend=biber]{biblatex}
+\addbibresource{first.bib}
+\usepackage[margin=2cm]{geometry}
+
+\author{Rishabh Dwivedi}
+\title{Algorithm For D-ARPSpoof}
+
+\begin{document}
+
+\maketitle
+\section{Data Structures Used}
+
+\begin{enumerate}
+	\item HashMap$<$OFPort,ArrayList$<$Vlan, IP, Mac$>$$>$ : ipPortMap
+	\item HashMap$<$MacAddress,HashMap$<$Vlan,Switch-Port$>$$>$ : macPortMap
+\end{enumerate}
+
+\section{Algorithm}
+
+
+\subsection{Handling Packet-IN DHCP Messages}
+
+
+\subsubsection{Updating Data Structures} \label{dhcp-ds}
+
+
+\begin{itemize}
+	\item \textbf{DHCP REQUEST}
+
+		\begin{enumerate}
+			\item Delete the mapped mac address for inPort and incoming packet's MAC Address from macPortMap.
+			\item If ipPortMap has entry for inPort and incomingPacket's vlan ID then delete that entry.
+			\item If macPortMap does not have any entry for incoming packet's source MAC Address and vlan id, then add those entry in macPortMap.
+		\end{enumerate}
+	\item \textbf{DHCP ACKNOWLEDGEMENT} \label{dhcp-ack}
+		\begin{enumerate}
+			\item Get Switch-Port pair from macPortMap for destination mac address and vlan id and name that as pair.
+			\item Add following entry in ipPortMap:
+
+				\small{
+				$<$pair.switch ,  pair.port , vid , dhcpPayload.yourIPAddress , destination-MAC$>$
+				}
+		\end{enumerate}
+
+\end{itemize}
+
+
+
+
+
+
+\subsection{Handling DHCP-ACK PacketOut Messages}
+
+Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
+
+
+\printbibliography
+\end{document}
