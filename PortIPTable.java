@@ -6,6 +6,7 @@ import java.util.Iterator;
 
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.VlanVid;
 
@@ -48,6 +49,7 @@ public class PortIPTable{
 		}
 		return exist;
 	}
+	/*
 	public boolean remove(DatapathId id,OFPort port,IPv4Address addr){
 		boolean exist = map.containsKey(id);
 		if(exist){
@@ -68,7 +70,7 @@ public class PortIPTable{
 			}
 		}
 		return exist;
-	}
+	}*/
 	public boolean remove(DatapathId id,OFPort port,VlanVid vid){
 		boolean exist = map.containsKey(id);
 		if(exist){
@@ -104,6 +106,7 @@ public class PortIPTable{
 		list.remove(tmpPair);
 		return true;
 	}
+	/*
 	private boolean remove(ArrayList<VlanIPPair> list,IPv4Address addr){
 		VlanIPPair tmpPair = null;
 		Iterator<VlanIPPair> itr = list.iterator();
@@ -117,7 +120,7 @@ public class PortIPTable{
 		if(tmpPair == null) return false;
 		list.remove(tmpPair);
 		return true;
-	}
+	}*/
 	public boolean switchExists(DatapathId id){
 		return map.containsKey(id);
 	}
@@ -155,6 +158,18 @@ public class PortIPTable{
 		for(VlanIPPair pair : list){
 			if(pair.getVid() == vid){
 				return pair.getIP();
+			}
+		}
+		return null;
+	}
+	public MacAddress getMacForVlan(DatapathId id,OFPort port, VlanVid vid){
+		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
+		if(internalMap == null) return null;
+		ArrayList<VlanIPPair> list = internalMap.get(port);
+		if(list == null) return null;
+		for(VlanIPPair pair : list){
+			if(pair.getVid() == vid){
+				return pair.getMac();
 			}
 		}
 		return null;
