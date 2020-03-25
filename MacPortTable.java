@@ -1,6 +1,8 @@
 package net.floodlightcontroller.sdn_arp_spoof_detection;
 
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map.Entry;
 
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.MacAddress;
@@ -23,6 +25,17 @@ public class MacPortTable{
 			map.remove(addr);
 		}
 		return true;
+	}
+	public void removeSwitch(DatapathId id){
+		Iterator<Entry<MacAddress,HashMap<VlanVid,SwitchPortPair>>> itr = map.entrySet().iterator();
+		while(itr.hasNext()){
+			Entry<MacAddress,HashMap<VlanVid,SwitchPortPair>> ent = itr.next();
+			HashMap<VlanVid,SwitchPortPair> internalMap = ent.getValue();
+			internalMap.entrySet() .removeIf(entry -> (id.equals(entry.getValue().getSwitch()))); 
+			if(internalMap.isEmpty()){
+				map.remove(ent.getKey());
+			}
+		}
 	}
 	public boolean deleteMacEntry(MacAddress addr){
 		if(!map.containsKey(addr)) return false;
