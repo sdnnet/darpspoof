@@ -3,12 +3,19 @@
 \usepackage[backend=biber]{biblatex}
 \addbibresource{first.bib}
 \usepackage[margin=2cm]{geometry}
+\usepackage{titling}
 
-\author{Rishabh Dwivedi}
 \title{Algorithm For D-ARPSpoof}
 
-\begin{document}
+\renewcommand{\maketitle}{
 
+	\begin{center}
+		{\huge\noindent\ignorespaces\textbf{\thetitle}\par}
+	\end{center}
+	\vspace{0.3in}
+	
+}
+\begin{document}
 \maketitle
 \section{Data Structures Used}
 
@@ -40,13 +47,45 @@
 			\item Add following entry in ipPortMap:
 
 				\small{
-				$<$pair.switch ,  pair.port , vid , dhcpPayload.yourIPAddress , destination-MAC$>$
+					$<$\textit{pair.switch} ,  \textit{pair.port} , vid , dhcpPayload.yourIPAddress , destination-MAC$>$
 				}
 		\end{enumerate}
 
 \end{itemize}
 
 
+\subsubsection{Updating Flow Rules}
+
+\begin{itemize}
+	\item \textbf{DHCP REQUEST}
+
+		\begin{enumerate}
+			\item If ipPortMap has entry for received switch, input port and incomingPacket's vlan id then remove flow entry from current switch with :
+
+				\begin{itemize}
+					\item inPort : incomingPacket's input port.
+					\item vlan-vid : incomingPacket's vlan id
+				\end{itemize}
+				
+		\end{enumerate}
+	\item \textbf{DHCP ACKNOWLEDGEMENT}
+
+		\begin{enumerate}
+			\item Get Switch-Port pair from macPortMap for destination mac address and vlan id and name that as pair.
+			\item Then add block flow for all ARP packet with incomingPacket's vlan id and input port. Write this flow with priority 10.
+			\item Add flow in \textit{pair.switch} to direct the packet with 
+
+				\begin{itemize}
+
+					\item IP address : dhcp-payload's yourIPAddresswith 
+					\item vlan-vid : incomingPacket's vlan id 
+					\item inPort : \textit{pair.port}
+				\end{itemize}
+
+				to goto flow table 1 of \textit{pair.switch} . Write this flow with priority 20.
+		\end{enumerate}
+		
+\end{itemize}
 
 
 
