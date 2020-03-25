@@ -14,6 +14,7 @@ import org.projectfloodlight.openflow.protocol.OFPortDesc;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.DatapathId;
@@ -22,6 +23,8 @@ import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.IPv4AddressWithMask;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.OFVlanVidMatch;
+import org.projectfloodlight.openflow.types.TableId;
 import org.projectfloodlight.openflow.types.VlanVid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +47,7 @@ import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.sdn_arp_spoof_detection.web.*;
 
 import java.util.HashMap;
+import java.util.HashSet;
 
 import net.floodlightcontroller.dhcpserver.*;
 public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IArpAuthenticatorService,IOFSwitchListener{
@@ -139,6 +143,13 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		writeBlockFlow(m,sw);
 	}
 
+	private void removePortFlow(IOFSwitch sw,OFPort port, VlanVid vid){
+		OFFactory factory = sw.getOFFactory();
+		Match match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setMasked(MatchField.ARP_SPA,IPv4AddressWithMask.of("0.0.0.0")).build();
+		OFFlowDelete flowDel = factory.buildFlowDelete().setMatch(match).build();
+		sw.write(flowDel);
+	}
+
 	// handles both ARP and DHCP
 	protected Command handlePacketInMessage(IOFSwitch sw,OFPacketIn pi,FloodlightContext cntx){
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
@@ -185,7 +196,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.REQUEST)){
 				if(portIPMap.vlanExists(sw.getId(),inPort,VlanVid.ofVlan(eth.getVlanID()))){
-					//unblockIfMalicious(sw,inPort);
+					removePortFlow(sw,inPort,vid);
 					MacAddress tmpMac = portIPMap.getMacForVlan(sw.getId(),inPort,vid);
 					portIPMap.remove(sw.getId(),inPort,VlanVid.ofVlan(eth.getVlanID()));
 					macPortTable.removeVid(tmpMac,vid);
@@ -214,6 +225,25 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
 		SwitchPortPair pair = macPortTable.getPortForMac(eth.getDestinationMACAddress(),vid);
 		portIPMap.addEntry(pair.getSwitch(),pair.getPort(),new VlanIPPair(vid,payload.getYourIPAddress(),eth.getDestinationMACAddress()));
+		IOFSwitch sw = switchService.getSwitch(pair.getSwitch());
+		if(sw!=null){
+			installProactiveRules(sw,pair.getPort(),vid,payload.getYourIPAddress());
+		}else{
+			switchRemoved(pair.getSwitch());
+		}
+	}
+
+	private void installProactiveRules(IOFSwitch sw, OFPort port,VlanVid vid, IPv4Address addr){
+		OFFactory factory = sw.getOFFactory();
+		Match match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setMasked(MatchField.ARP_SPA,IPv4AddressWithMask.of("0.0.0.0/0")).build();
+		ArrayList<OFAction> actionList = new ArrayList<>();
+		OFFlowAdd flowAdd = factory.buildFlowAdd().setMatch(match).setHardTimeout(0).setIdleTimeout(0).setActions(actionList).setPriority(10).build();
+		sw.write(flowAdd);
+		ArrayList<OFInstruction> insSet  = new ArrayList<>();
+		insSet.add(factory.instructions().buildGotoTable().setTableId(TableId.of(1)).build());
+		match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_SPA,addr).build();
+		flowAdd = factory.buildFlowAdd().setMatch(match).setHardTimeout(0).setIdleTimeout(0).setInstructions(insSet).setPriority(20).build();
+		sw.write(flowAdd);
 	}
 
 
@@ -305,8 +335,8 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	@Override
 	public void switchRemoved(DatapathId switchId) {
 		// TODO Auto-generated method stub
-		switchMap.remove(switchId);
-		macMap.entrySet().removeIf(entry->(entry.getValue().getSwitch().equals(switchId)));
+		portIPMap.remove(switchId);
+		macPortTable.removeSwitch(switchId);
 	}
 
 	@Override
