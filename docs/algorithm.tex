@@ -72,12 +72,12 @@
 
 		\begin{enumerate}
 			\item Get Switch-Port pair from macPortMap for destination mac address and vlan id and name that as pair.
-			\item Then add block flow for all ARP packet with incomingPacket's vlan id and input port. Write this flow with priority 10.
+			\item Then add a flow rule to block all ARP packet from the  current input port. Write this flow with priority 10.
 			\item Add flow in \textit{pair.switch} to direct the packet with 
 
 				\begin{itemize}
 
-					\item IP address : dhcp-payload's yourIPAddresswith 
+					\item IP address : dhcp-payload's yourIPAddress
 					\item vlan-vid : incomingPacket's vlan id 
 					\item inPort : \textit{pair.port}
 				\end{itemize}
@@ -94,6 +94,18 @@
 
 Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
 
+\subsection{Handling Switch Added event}
+
+\begin{enumerate}
+	\item Write flow rule to forward all ARP packets to controller in flow table 1 of added switch with priority 0. (Default flow for table 1) 
+\end{enumerate}
+
+\subsection{Handling Switch Removed event}
+
+\begin{enumerate}
+	\item Remove all entry of removed swith from ipPortMap
+	\item Also, Remove all entry of removed switch from macPortMap.
+\end{enumerate}
 
 \printbibliography
 \end{document}
