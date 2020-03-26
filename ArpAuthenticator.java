@@ -22,6 +22,7 @@ import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.IPv4AddressWithMask;
 import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.Masked;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.OFVlanVidMatch;
 import org.projectfloodlight.openflow.types.TableId;
@@ -235,7 +236,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 	private void installProactiveRules(IOFSwitch sw, OFPort port,VlanVid vid, IPv4Address addr){
 		OFFactory factory = sw.getOFFactory();
-		Match match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setMasked(MatchField.ARP_SPA,IPv4AddressWithMask.of("0.0.0.0/0")).build();
+		Match match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setMasked(MatchField.VLAN_VID,Masked.of(OFVlanVidMatch.FULL_MASK,OFVlanVidMatch.FULL_MASK)).setExact(MatchField.ETH_TYPE,EthType.ARP).setMasked(MatchField.ARP_SPA,IPv4AddressWithMask.of("0.0.0.0/0")).build();
 		ArrayList<OFAction> actionList = new ArrayList<>();
 		OFFlowAdd flowAdd = factory.buildFlowAdd().setMatch(match).setHardTimeout(0).setIdleTimeout(0).setActions(actionList).setPriority(10).build();
 		sw.write(flowAdd);
@@ -328,38 +329,36 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 	@Override
 	public void switchAdded(DatapathId switchId) {
-		// TODO Auto-generated method stub
-
+		/*
+		IOFSwitch sw = switchService.getSwitch(switchId);
+		OFFactory factory = sw.getOFFactory();
+		Match arpMatch = factory.buildMatch().setExact(
+		*/
 	}
 
 	@Override
 	public void switchRemoved(DatapathId switchId) {
-		// TODO Auto-generated method stub
 		portIPMap.remove(switchId);
 		macPortTable.removeSwitch(switchId);
 	}
 
 	@Override
 	public void switchActivated(DatapathId switchId) {
-		// TODO Auto-generated method stub
 
 	}
 
 	@Override
 	public void switchPortChanged(DatapathId switchId, OFPortDesc port, PortChangeType type) {
-		// TODO Auto-generated method stub
 
 	}
 
 	@Override
 	public void switchChanged(DatapathId switchId) {
-		// TODO Auto-generated method stub
 
 	}
 
 	@Override
 	public void switchDeactivated(DatapathId switchId) {
-		// TODO Auto-generated method stub
 
 	}
 
