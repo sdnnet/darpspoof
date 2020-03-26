@@ -55,11 +55,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	protected static Logger log = LoggerFactory.getLogger(ArpAuthenticator.class);
 	protected IRestApiService restApiService;
 	protected IFloodlightProviderService floodlightProviderService;
-	//For <port-ip> mapping, mac is there for removing mac entry from macMap while unblocking in constant time
-	protected HashMap<DatapathId,HashMap<OFPort,IPMacPair>> switchMap;
 	protected PortIPTable portIPMap;
-	//For <mac-<switch-port>> mapping so that we can reach to right switch using DHCPACK
-	protected HashMap<MacAddress,SwitchPortPair> macMap;
 	protected MacPortTable macPortTable;
 	protected ARPDHCP dhcp;
 
@@ -92,12 +88,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
 		OFPort inPort = (pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort()
 				: pi.getMatch().get(MatchField.IN_PORT));
-		HashMap<OFPort,IPMacPair> actMap = switchMap.get(sw.getId());
 		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
-		if(actMap == null){
-			actMap = new HashMap<>();
-			switchMap.put(sw.getId(),actMap); 
-		}
 		/* if we get arp from unregistered port of switch
 		 * it means that arp is verified by any other switch 
 		 * previously so, not checking that case.
@@ -107,8 +98,8 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		 * If we get different arp source protocol address
 		 * as registered than block that flow
 		 */
-		/*
 		if(eth.getEtherType().equals(EthType.ARP)){
+			/*
 			ARP arp = (ARP) eth.getPayload();
 			IPv4Address addr = arp.getSenderProtocolAddress();
 			if(addr.equals(IPv4Address.of("0.0.0.0"))) return Command.CONTINUE;
@@ -117,9 +108,8 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 					block(inPort,sw,addr);
 					return Command.STOP;
 				}
-			}
+			}*/
 		} 
-		*/
 		/* if we get a dhcp request from a port it means a 
 		 * new device is connected to that port.
 		 * So, remove any entry from data-structure and 
