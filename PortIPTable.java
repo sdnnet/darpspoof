@@ -12,6 +12,9 @@ import org.projectfloodlight.openflow.types.VlanVid;
 
 public class PortIPTable{
 	private HashMap<DatapathId,HashMap<OFPort,ArrayList<VlanIPPair>>> map;
+	public PortIPTable(){
+		map = new HashMap<>();
+	}
 	public boolean addEntry(DatapathId id,OFPort port,VlanIPPair pair){
 		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
 		if(internalMap == null){

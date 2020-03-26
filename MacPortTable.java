@@ -11,6 +11,9 @@ import org.projectfloodlight.openflow.types.VlanVid;
 
 public class MacPortTable{
 	private HashMap<MacAddress,HashMap<VlanVid,SwitchPortPair>> map;
+	public MacPortTable(){
+		map = new HashMap<>();
+	}
 	public boolean vidExists(MacAddress addr,VlanVid vid){
 		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(addr);
 		if(internalMap == null) return false;
@@ -28,12 +31,14 @@ public class MacPortTable{
 	}
 	public void removeSwitch(DatapathId id){
 		Iterator<Entry<MacAddress,HashMap<VlanVid,SwitchPortPair>>> itr = map.entrySet().iterator();
-		while(itr.hasNext()){
-			Entry<MacAddress,HashMap<VlanVid,SwitchPortPair>> ent = itr.next();
-			HashMap<VlanVid,SwitchPortPair> internalMap = ent.getValue();
-			internalMap.entrySet() .removeIf(entry -> (id.equals(entry.getValue().getSwitch()))); 
-			if(internalMap.isEmpty()){
-				map.remove(ent.getKey());
+		if(itr!=null){
+			while(itr.hasNext()){
+				Entry<MacAddress,HashMap<VlanVid,SwitchPortPair>> ent = itr.next();
+				HashMap<VlanVid,SwitchPortPair> internalMap = ent.getValue();
+				internalMap.entrySet() .removeIf(entry -> (id.equals(entry.getValue().getSwitch()))); 
+				if(internalMap.isEmpty()){
+					map.remove(ent.getKey());
+				}
 			}
 		}
 	}

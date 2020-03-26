@@ -169,7 +169,12 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		sw.write(flowAdd);
 		ArrayList<OFInstruction> insSet  = new ArrayList<>();
 		insSet.add(factory.instructions().buildGotoTable().setTableId(TableId.of(1)).build());
-		match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_SPA,addr).build();
+		if(vid.equals(VlanVid.ZERO)){
+			log.info("FOUND WITHOUT ANY VLAN");
+			match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.UNTAGGED).setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_SPA,addr).build();
+		}else{
+			match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_SPA,addr).build();
+		}
 		flowAdd = factory.buildFlowAdd().setMatch(match).setHardTimeout(0).setIdleTimeout(0).setInstructions(insSet).setPriority(20).build();
 		sw.write(flowAdd);
 	}
@@ -249,6 +254,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_OUT, this);
 		//restApiService.addRestletRoutable(new ArpAuthenticatorWebRoutable());
 		switchService.addOFSwitchListener(this);
+		log.info("HELLO THIS IS A ARP SERVICE");
 	}
 
 	/*
