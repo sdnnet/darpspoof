@@ -45,13 +45,12 @@ import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.DHCP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.restserver.IRestApiService;
-import net.floodlightcontroller.sdn_arp_spoof_detection.web.*;
+//import net.floodlightcontroller.sdn_arp_spoof_detection.web.*;
 
 import java.util.HashMap;
-import java.util.HashSet;
 
 import net.floodlightcontroller.dhcpserver.*;
-public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IArpAuthenticatorService,IOFSwitchListener{
+public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IOFSwitchListener{
 	protected IOFSwitchService switchService;
 	protected static Logger log = LoggerFactory.getLogger(ArpAuthenticator.class);
 	protected IRestApiService restApiService;
@@ -81,69 +80,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		return name.equals("forwarding")||name.equals("dhcpserver");
 	}
 
-
-	/* Match used for unblocking purpose
-	 * ARP source protocol address is masked
-	 * for 0.0.0.0/0 i.e., any IP address
-	 * to delete all IP on a given port
-	 */
-	private Match createMatch(IOFSwitch sw,OFPort port){
-		OFFactory factory = sw.getOFFactory();
-		return factory.buildMatch().setExact(MatchField.IN_PORT,port)
-			.setExact(MatchField.ETH_TYPE,EthType.ARP)
-			.setMasked(MatchField.ARP_SPA,IPv4AddressWithMask.of("0.0.0.0/0"))
-			.build();
-	}
-
-
-
-	/* Match used for blocking purpose
-	 * To block ip address "addr" on 
-	 * OFPort "port"
-	 */
-	private Match createMatch(IOFSwitch sw,OFPort port,IPv4Address addr){
-		OFFactory factory = sw.getOFFactory();
-		return factory.buildMatch().setExact(MatchField.IN_PORT,port)
-			.setExact(MatchField.ETH_TYPE,EthType.ARP)
-			.setExact(MatchField.ARP_SPA,addr)
-			.build();
-	}
-
-
-
-
-	/* Write block flow for unlimited time
-	 * on basis of block match
-	 */
-	private void writeBlockFlow(Match m,IOFSwitch sw){
-		OFFactory factory = sw.getOFFactory();
-		ArrayList<OFAction> actions = new ArrayList<>();
-		OFFlowAdd flow =factory.buildFlowAdd().setMatch(m).setHardTimeout(0).setIdleTimeout(0).setPriority(1000).setActions(actions).build();
-		sw.write(flow);
-	}
-
-
-	/* Write unblock flow i.e., delete block flow
-	 * on basis on unblock match
-	 */
-	private void writeUnblockFlow(IOFSwitch sw,Match m){
-		OFFactory factory = sw.getOFFactory();
-		OFFlowDelete flow =factory.buildFlowDelete().setMatch(m).build();
-		sw.write(flow);
-	}
-
-
-	private void unblockIfMalicious(IOFSwitch sw,OFPort port){
-		Match m = createMatch(sw,port);
-		writeUnblockFlow(sw,m);
-	}
-
-
-	private void block(OFPort port,IOFSwitch sw,IPv4Address addr){
-		Match m = createMatch(sw,port,addr);
-		writeBlockFlow(m,sw);
-	}
-
 	private void removePortFlow(IOFSwitch sw,OFPort port, VlanVid vid){
 		OFFactory factory = sw.getOFFactory();
 		Match match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setMasked(MatchField.ARP_SPA,IPv4AddressWithMask.of("0.0.0.0")).build();
@@ -171,6 +107,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		 * If we get different arp source protocol address
 		 * as registered than block that flow
 		 */
+		/*
 		if(eth.getEtherType().equals(EthType.ARP)){
 			ARP arp = (ARP) eth.getPayload();
 			IPv4Address addr = arp.getSenderProtocolAddress();
@@ -182,7 +119,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 				}
 			}
 		} 
-
+		*/
 		/* if we get a dhcp request from a port it means a 
 		 * new device is connected to that port.
 		 * So, remove any entry from data-structure and 
@@ -273,6 +210,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	 */
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
+		if(!portIPMap.switchExists(sw.getId())) switchAdded(sw.getId());
 		if(msg.getType().equals(OFType.PACKET_IN)) return handlePacketInMessage(sw,(OFPacketIn) msg,cntx);
 		else if(msg.getType().equals(OFType.PACKET_OUT)) return handlePacketOutMessage(sw,(OFPacketOut)msg,cntx);
 		return Command.CONTINUE;
@@ -284,7 +222,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
 		Collection<Class<? extends IFloodlightService>> l  = new ArrayList<>();
-		l.add(IArpAuthenticatorService.class);
+		//l.add(IArpAuthenticatorService.class);
 		return l;
 	}
 
@@ -292,7 +230,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
 		Map<Class<? extends IFloodlightService>,IFloodlightService> m  = new HashMap<>();
-		m.put(IArpAuthenticatorService.class,this);
+		//m.put(IArpAuthenticatorService.class,this);
 		return m;
 	}
 
@@ -301,6 +239,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		Collection<Class<? extends IFloodlightService>> l =new ArrayList<Class<? extends IFloodlightService>>();
 		l.add(IRestApiService.class);
 		l.add(IFloodlightProviderService.class);
+		l.add(IOFSwitchService.class);
 		return l;
 	}
 
@@ -309,8 +248,8 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		floodlightProviderService = context.getServiceImpl(IFloodlightProviderService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		switchService = context.getServiceImpl(IOFSwitchService.class);
-		macMap = new HashMap<>();
-		switchMap = new HashMap<>();
+		portIPMap = new PortIPTable();
+		macPortTable = new MacPortTable();
 		dhcp = new ARPDHCP(context);
 	}
 
@@ -318,22 +257,27 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, this);
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_OUT, this);
-		restApiService.addRestletRoutable(new ArpAuthenticatorWebRoutable());
+		//restApiService.addRestletRoutable(new ArpAuthenticatorWebRoutable());
 		switchService.addOFSwitchListener(this);
 	}
 
+	/*
 	@Override
 	public HashMap<DatapathId, HashMap<OFPort, IPMacPair>> getArpMap() {
 		return switchMap;
-	}
+	}*/
 
 	@Override
 	public void switchAdded(DatapathId switchId) {
-		/*
-		IOFSwitch sw = switchService.getSwitch(switchId);
-		OFFactory factory = sw.getOFFactory();
-		Match arpMatch = factory.buildMatch().setExact(
-		*/
+		if(!portIPMap.switchExists(switchId)){
+			IOFSwitch sw = switchService.getSwitch(switchId);
+			OFFactory factory = sw.getOFFactory();
+			Match arpMatch = factory.buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).build();
+			ArrayList<OFAction> list = new ArrayList<>();
+			list.add(factory.actions().buildOutput().setPort(OFPort.CONTROLLER).build());
+			OFFlowAdd flowAdd = factory.buildFlowAdd().setMatch(arpMatch).setIdleTimeout(0).setHardTimeout(0).setPriority(0).setActions(list).setTableId(TableId.of(1)).build();
+			sw.write(flowAdd);
+		}
 	}
 
 	@Override
