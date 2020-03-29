@@ -118,12 +118,6 @@
 
 Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
 
-\subsection{Handling Switch Added event}
-
-\begin{enumerate}
-	\item Write flow rule to forward all ARP packets to controller in flow table 1 of added switch with priority 0. (Default flow for table 1) 
-\end{enumerate}
-
 \subsection{Handling ARP}
 
 \begin{enumerate}
@@ -140,6 +134,13 @@ Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
 			pushPacket(switch=curSwitch, packet=packet-in, outPort=list[1].port, inPort=list[0].port);
 		\end{lstlisting}
 \end{enumerate}
+
+\subsection{Handling Switch Added event}
+
+\begin{enumerate}
+	\item Write flow rule to forward all ARP packets to controller in flow table 1 of added switch with priority 0. (Default flow for table 1) 
+\end{enumerate}
+
 
 
 \subsection{Handling Switch Removed event}
