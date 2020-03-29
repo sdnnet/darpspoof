@@ -17,6 +17,7 @@ import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.ArpOpcode;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.IPv4Address;
@@ -73,7 +74,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	//This module will get packet before forwarding module
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		return name.equals("forwarding")||name.equals("dhcpserver");
+		return true;
 	}
 
 	private void removePortFlow(IOFSwitch sw,OFPort port, VlanVid vid){
@@ -89,27 +90,28 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		OFPort inPort = (pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort()
 				: pi.getMatch().get(MatchField.IN_PORT));
 		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
-		/* if we get arp from unregistered port of switch
-		 * it means that arp is verified by any other switch 
-		 * previously so, not checking that case.
-		 * (As it will be switch connection link that's why
-		 * it is not registered)
-		 *
-		 * If we get different arp source protocol address
-		 * as registered than block that flow
-		 */
+
 		if(eth.getEtherType().equals(EthType.ARP)){
-			/*
 			ARP arp = (ARP) eth.getPayload();
-			IPv4Address addr = arp.getSenderProtocolAddress();
-			if(addr.equals(IPv4Address.of("0.0.0.0"))) return Command.CONTINUE;
-			if(actMap.containsKey(inPort)){
-				if(!addr.equals(actMap.get(inPort).getIp())){
-					block(inPort,sw,addr);
-					return Command.STOP;
-				}
-			}*/
+			if(arp.getTargetProtocolAddress().equals(arp.getSenderProtocolAddress())) return Command.CONTINUE;
+			OFFactory factory = sw.getOFFactory();
+			String str ;
+			if(arp.getOpCode().equals(ArpOpcode.REPLY)) str = "REPLY";
+			else str = "REQUEST";
+			log.info("GOT a {} from {}",str,sw);
+			log.info("FROM {} TO {}",arp.getSenderProtocolAddress(),arp.getTargetProtocolAddress());
+			Match match;
+			if(vid.equals(VlanVid.ZERO)){
+				match = factory.buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.VLAN_VID,OFVlanVidMatch.UNTAGGED).setExact(MatchField.ARP_TPA,arp.getSenderProtocolAddress()).build();
+			}else{
+				match = factory.buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ARP_TPA,arp.getSenderProtocolAddress()).build();
+			}
+			ArrayList<OFAction> list = new ArrayList<>();
+			list.add(factory.actions().buildOutput().setPort(inPort).build());
+			OFFlowAdd flowAdd = factory.buildFlowAdd().setTableId(TableId.of(1)).setHardTimeout(0).setIdleTimeout(10).setPriority(30).setActions(list).setMatch(match).build();
+			sw.write(flowAdd);
 		} 
+
 		/* if we get a dhcp request from a port it means a 
 		 * new device is connected to that port.
 		 * So, remove any entry from data-structure and 
@@ -198,11 +200,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	}
 
 
-
-	/* handles both PacketIn and PacketOut message
-	 * as PacketOut message can also have DHCPACK
-	 * when controllers act as DHCP server
-	 */
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 		if(!portIPMap.switchExists(sw.getId())) switchAdded(sw.getId());
@@ -213,7 +210,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 
 
-	//Expose REST API service 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
 		Collection<Class<? extends IFloodlightService>> l  = new ArrayList<>();
@@ -254,7 +250,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		floodlightProviderService.addOFMessageListener(OFType.PACKET_OUT, this);
 		//restApiService.addRestletRoutable(new ArpAuthenticatorWebRoutable());
 		switchService.addOFSwitchListener(this);
-		log.info("HELLO THIS IS A ARP SERVICE");
 	}
 
 	/*
@@ -268,6 +263,11 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		if(!portIPMap.switchExists(switchId)){
 			IOFSwitch sw = switchService.getSwitch(switchId);
 			OFFactory factory = sw.getOFFactory();
+			Match tableMatch = factory.buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).build();
+			ArrayList<OFInstruction> tableList = new ArrayList<>();
+			tableList.add(factory.instructions().buildGotoTable().setTableId(TableId.of(1)).build());
+			OFFlowAdd tableAdd = factory.buildFlowAdd().setMatch(tableMatch).setInstructions(tableList).setIdleTimeout(0).setHardTimeout(0).setPriority(5).build();
+			sw.write(tableAdd);
 			Match arpMatch = factory.buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).build();
 			ArrayList<OFAction> list = new ArrayList<>();
 			list.add(factory.actions().buildOutput().setPort(OFPort.CONTROLLER).build());
