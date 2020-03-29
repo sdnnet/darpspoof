@@ -1,5 +1,6 @@
 package net.floodlightcontroller.sdn_arp_spoof_detection;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -9,14 +10,18 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.projectfloodlight.openflow.protocol.OFFactory;
+import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.Masked;
+import org.projectfloodlight.openflow.types.OFBufferId;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.OFVlanVidMatch;
 import org.projectfloodlight.openflow.types.TableId;
@@ -46,7 +51,9 @@ import net.floodlightcontroller.routing.Path;
 import net.floodlightcontroller.util.OFMessageDamper;
 
 public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDiscoveryListener {
-
+	protected int FLOWMOD_DEFAULT_PRIORITY = 30;
+	protected int FLOWMOD_DEFAULT_HARD_TIMEOUT = 0;
+	protected int FLOWMOD_DEFAULT_IDLE_TIMEOUT = 10;
 	protected Logger log;
 	protected OFMessageDamper messageDamper;
 	private IRoutingService routingService;
@@ -385,7 +392,23 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 		return Command.CONTINUE;
 	}
 
-	private boolean installRoute(Match match,IOFSwitch sw,Path path,OFPacketIn pi,FloodlightContext cntx,U64 cookie){
+	private boolean installRoute(Match match,IOFSwitch initSwitch,Path path,OFPacketIn pi,FloodlightContext cntx,U64 cookie){
+		List<NodePortTuple> paths = path.getPath();
+		for(int indx = paths.size()-1; indx>0; indx-=2){
+			DatapathId dpid = paths.get(indx).getNodeId();
+			IOFSwitch sw = switchService.getSwitch(dpid);
+			if(sw == null){
+				log.warn("Cannot install route because switch with dpid {} is missing",dpid);
+				return false;
+			}
+			OFFactory factory = sw.getOFFactory();
+			OFPort outPort = paths.get(indx).getPortId();
+			ArrayList<OFAction> list = new ArrayList<>();
+			list.add(factory.actions().buildOutput().setPort(outPort).build());
+			OFFlowAdd flowAdd = factory.buildFlowAdd().setTableId(DEFAULT_TABLE_ID).setMatch(match).setHardTimeout(FLOWMOD_DEFAULT_HARD_TIMEOUT).setIdleTimeout(FLOWMOD_DEFAULT_IDLE_TIMEOUT).setCookie(cookie).setActions(list).setBufferId(OFBufferId.NO_BUFFER).build();
+			sw.write(flowAdd);
+		}
+		return true;
 	}
 	protected U64 makeForwardingCookie(IRoutingDecision decision, U64 flowSetId) {
 		long user_fields = 0;
