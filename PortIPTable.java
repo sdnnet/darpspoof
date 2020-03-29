@@ -10,10 +10,28 @@ import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.VlanVid;
 
+import net.floodlightcontroller.core.types.NodePortTuple;
+
 public class PortIPTable{
 	private HashMap<DatapathId,HashMap<OFPort,ArrayList<VlanIPPair>>> map;
 	public PortIPTable(){
 		map = new HashMap<>();
+	}
+	public NodePortTuple getSwitchFor(VlanVid vid, IPv4Address addr){
+		Iterator<DatapathId> switchItr = map.keySet().iterator();
+		while(switchItr.hasNext()){
+			DatapathId dpid = switchItr.next();
+			HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(dpid);
+			Iterator<OFPort> portItr = internalMap.keySet().iterator();
+			while(portItr.hasNext()){
+				OFPort port = portItr.next();
+				ArrayList<VlanIPPair> list = internalMap.get(port);
+				for(VlanIPPair pair : list){
+					if(pair.getIP().equals(addr)&&pair.getVid().equals(vid)) return new NodePortTuple(dpid,port);
+				}
+			}
+		}
+		return null;
 	}
 	public boolean addEntry(DatapathId id,OFPort port,VlanIPPair pair){
 		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);

@@ -10,17 +10,26 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.Masked;
 import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.OFVlanVidMatch;
 import org.projectfloodlight.openflow.types.TableId;
 import org.projectfloodlight.openflow.types.U64;
+import org.projectfloodlight.openflow.types.VlanVid;
 import org.python.google.common.collect.ImmutableList;
+import org.slf4j.Logger;
 
 import com.google.common.collect.Maps;
 
+import net.floodlightcontroller.core.FloodlightContext;
+import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IListener.Command;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
@@ -28,11 +37,17 @@ import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.core.util.AppCookie;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryListener;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
+import net.floodlightcontroller.packet.ARP;
+import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.routing.IRoutingDecision;
 import net.floodlightcontroller.routing.IRoutingDecisionChangedListener;
 import net.floodlightcontroller.routing.IRoutingService;
+import net.floodlightcontroller.routing.Path;
 import net.floodlightcontroller.util.OFMessageDamper;
 
 public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDiscoveryListener {
+
+	protected Logger log;
 	protected OFMessageDamper messageDamper;
 	private IRoutingService routingService;
 	private	ILinkDiscoveryService linkService;
@@ -82,7 +97,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 			flowSetGenerator += 1;
 			if (flowSetGenerator == FLOWSET_MAX) {
 				flowSetGenerator = 0;
-				//log.warn("Flowset IDs have exceeded capacity of {}. Flowset ID generator resetting back to 0", FLOWSET_MAX);
+				log.warn("Flowset IDs have exceeded capacity of {}. Flowset ID generator resetting back to 0", FLOWSET_MAX);
 			}
 			U64 id = U64.of(flowSetGenerator << FLOWSET_SHIFT);
 			//log.debug("Generating flowset ID {}, shifted {}", flowSetGenerator, id);
@@ -146,17 +161,19 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 	}
 
 	protected FlowSetIdRegistry flowRegistry;
-	public ArpForwarding(FloodlightModuleContext context,IOFSwitchService switchService){
+	public ArpForwarding(FloodlightModuleContext context,IOFSwitchService switchService,Logger logger){
 		routingService = context.getServiceImpl(IRoutingService.class);
 		linkService = context.getServiceImpl(ILinkDiscoveryService.class);
 		routingService.addRoutingDecisionChangedListener(this);
 		linkService.addListener(this);
 		this.switchService = switchService;
+		this.log = logger;
 	}
 	private Set<OFMessage> buildDeleteFlows(OFPort port, Set<OFMessage> msgs, IOFSwitch sw, U64 cookie, U64 cookieMask) {
 		if(sw.getOFFactory().getVersion().compareTo(OFVersion.OF_10) == 0) {
 			msgs.add(sw.getOFFactory().buildFlowDelete()
 					.setCookie(cookie)
+					.setTableId(DEFAULT_TABLE_ID)
 					// cookie mask not supported in OpenFlow 1.0
 					.setMatch(sw.getOFFactory().buildMatch()
 						.setExact(MatchField.IN_PORT, port)
@@ -165,6 +182,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 
 			msgs.add(sw.getOFFactory().buildFlowDelete()
 					.setCookie(cookie)
+					.setTableId(DEFAULT_TABLE_ID)
 					// cookie mask not supported in OpenFlow 1.0
 					.setOutPort(port)
 					.build());
@@ -173,6 +191,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 			msgs.add(sw.getOFFactory().buildFlowDelete()
 					.setCookie(cookie)
 					.setCookieMask(cookieMask)
+					.setTableId(DEFAULT_TABLE_ID)
 					.setMatch(sw.getOFFactory().buildMatch()
 						.setExact(MatchField.IN_PORT, port)
 						.build())
@@ -181,6 +200,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 			msgs.add(sw.getOFFactory().buildFlowDelete()
 					.setCookie(cookie)
 					.setCookieMask(cookieMask)
+					.setTableId(DEFAULT_TABLE_ID)
 					.setOutPort(port)
 					.build());
 		}
@@ -337,4 +357,53 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 		return resultBuilder.build();
 	}
 
+	protected Command processPacketInMessage(IOFSwitch sw, OFPacketIn pi, FloodlightContext cntx, PortIPTable portIpMap){
+		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
+		if(eth.getEtherType().equals(EthType.ARP)){
+			ARP arp = (ARP) eth.getPayload();
+			NodePortTuple destTuple = portIpMap.getSwitchFor(vid,arp.getTargetProtocolAddress());
+			if(destTuple == null) return Command.STOP;
+			NodePortTuple srcTuple = portIpMap.getSwitchFor(vid,arp.getSenderProtocolAddress());
+			if(srcTuple == null){
+				log.info("GOT a malicious packet");
+				return Command.STOP;
+			}
+			IRoutingDecision decision = IRoutingDecision.rtStore.get(cntx, IRoutingDecision.CONTEXT_DECISION);
+			U64 flowId = flowRegistry.generateFlowSetId();
+			U64 cookie = makeForwardingCookie(decision,flowId);
+			Path path = routingService.getPath(srcTuple.getNodeId(),srcTuple.getPortId(),destTuple.getNodeId(),destTuple.getPortId());
+			Match match = sw.getOFFactory().buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_TPA,arp.getTargetProtocolAddress()).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).build();
+			if(path.getPath().isEmpty()){
+				return Command.STOP;
+			}
+			installRoute(match,sw,path,pi,cntx,cookie);
+			for(NodePortTuple npt : path.getPath()){
+				flowRegistry.registerFlowSetId(npt,flowId);
+			}
+		}
+		return Command.CONTINUE;
+	}
+
+	private boolean installRoute(Match match,IOFSwitch sw,Path path,OFPacketIn pi,FloodlightContext cntx,U64 cookie){
+	}
+	protected U64 makeForwardingCookie(IRoutingDecision decision, U64 flowSetId) {
+		long user_fields = 0;
+
+		U64 decision_cookie = (decision == null) ? null : decision.getDescriptor();
+		if (decision_cookie != null) {
+			user_fields |= AppCookie.extractUser(decision_cookie) & DECISION_MASK;
+		}
+
+		if (flowSetId != null) {
+			user_fields |= AppCookie.extractUser(flowSetId) & FLOWSET_MASK;
+		}
+
+		// TODO: Mask in any other required fields here
+
+		if (user_fields == 0) {
+			return ARP_FORWARDING_COOKIE;
+		}
+		return AppCookie.makeCookie(ARP_APP_ID, user_fields);
+	}
 }
