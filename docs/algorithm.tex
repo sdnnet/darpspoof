@@ -131,7 +131,7 @@ Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
 			for(index = list.size-1;index>0;index-=2){
 				installFlowRule(table-id=2, match=m, switch=list[index].switch, priority=30, action=output(list[index].port);
 			}
-			pushPacket(switch=curSwitch, packet=packet-in, outPort=list[1].port, inPort=list[0].port);
+			pushOFPacketOut(switch=curSwitch, packet=packet-in, outPort=list[1].port, inPort=list[0].port);
 		\end{lstlisting}
 \end{enumerate}
 
