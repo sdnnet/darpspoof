@@ -2,6 +2,7 @@ package net.floodlightcontroller.sdn_arp_spoof_detection;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFPacketOut;
+import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
@@ -30,6 +32,7 @@ import org.projectfloodlight.openflow.types.U64;
 import org.projectfloodlight.openflow.types.VlanVid;
 import org.python.google.common.collect.ImmutableList;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Maps;
 
@@ -56,7 +59,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 	protected int FLOWMOD_DEFAULT_PRIORITY = 30;
 	protected int FLOWMOD_DEFAULT_HARD_TIMEOUT = 0;
 	protected int FLOWMOD_DEFAULT_IDLE_TIMEOUT = 10;
-	protected Logger log;
+	protected static Logger log;
 	protected OFMessageDamper messageDamper;
 	private IRoutingService routingService;
 	private	ILinkDiscoveryService linkService;
@@ -169,14 +172,19 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 		}
 	}
 
+	private static int OFMESSAGE_DAMPER_CAPACITY = 10000;
+	private static int OFMESSAGE_DAMPER_TIMEOUT = 250; // ms
+    
 	protected FlowSetIdRegistry flowRegistry;
-	public ArpForwarding(FloodlightModuleContext context,IOFSwitchService switchService,Logger logger){
+	public ArpForwarding(FloodlightModuleContext context,IOFSwitchService switchService){
 		routingService = context.getServiceImpl(IRoutingService.class);
 		linkService = context.getServiceImpl(ILinkDiscoveryService.class);
 		routingService.addRoutingDecisionChangedListener(this);
 		linkService.addListener(this);
 		this.switchService = switchService;
-		this.log = logger;
+		log = LoggerFactory.getLogger(ArpAuthenticator.class);
+		messageDamper = new OFMessageDamper(OFMESSAGE_DAMPER_CAPACITY,EnumSet.of(OFType.FLOW_MOD),OFMESSAGE_DAMPER_TIMEOUT);
+		flowRegistry = FlowSetIdRegistry.getInstance();
 	}
 	private Set<OFMessage> buildDeleteFlows(OFPort port, Set<OFMessage> msgs, IOFSwitch sw, U64 cookie, U64 cookieMask) {
 		if(sw.getOFFactory().getVersion().compareTo(OFVersion.OF_10) == 0) {
@@ -379,12 +387,18 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 				return Command.STOP;
 			}
 			IRoutingDecision decision = IRoutingDecision.rtStore.get(cntx, IRoutingDecision.CONTEXT_DECISION);
+			IRoutingDecision.RoutingAction rAction = decision.getRoutingAction();
+			if(rAction.equals(IRoutingDecision.RoutingAction.DROP)){
+				return Command.CONTINUE;
+			}else if(rAction.equals(IRoutingDecision.RoutingAction.NONE)){
+				return Command.CONTINUE;
+			}
 			U64 flowId = flowRegistry.generateFlowSetId();
 			U64 cookie = makeForwardingCookie(decision,flowId);
 			Path path = routingService.getPath(srcTuple.getNodeId(),srcTuple.getPortId(),destTuple.getNodeId(),destTuple.getPortId());
 			Match match = sw.getOFFactory().buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_TPA,arp.getTargetProtocolAddress()).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).build();
 			if(path.getPath().isEmpty()){
-				return Command.STOP;
+				return Command.CONTINUE;
 			}
 			installRoute(match,sw,path,pi,cntx,cookie);
 			for(NodePortTuple npt : path.getPath()){

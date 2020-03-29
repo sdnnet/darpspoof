@@ -17,7 +17,6 @@ import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
-import org.projectfloodlight.openflow.types.ArpOpcode;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.IPv4Address;
@@ -42,7 +41,6 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.DHCP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.restserver.IRestApiService;
@@ -59,6 +57,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	protected PortIPTable portIPMap;
 	protected MacPortTable macPortTable;
 	protected ARPDHCP dhcp;
+	protected ArpForwarding arpForwarding;
 
 
 	@Override
@@ -92,24 +91,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
 
 		if(eth.getEtherType().equals(EthType.ARP)){
-			ARP arp = (ARP) eth.getPayload();
-			if(arp.getTargetProtocolAddress().equals(arp.getSenderProtocolAddress())) return Command.CONTINUE;
-			OFFactory factory = sw.getOFFactory();
-			String str ;
-			if(arp.getOpCode().equals(ArpOpcode.REPLY)) str = "REPLY";
-			else str = "REQUEST";
-			log.info("GOT a {} from {}",str,sw);
-			log.info("FROM {} TO {}",arp.getSenderProtocolAddress(),arp.getTargetProtocolAddress());
-			Match match;
-			if(vid.equals(VlanVid.ZERO)){
-				match = factory.buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.VLAN_VID,OFVlanVidMatch.UNTAGGED).setExact(MatchField.ARP_TPA,arp.getSenderProtocolAddress()).build();
-			}else{
-				match = factory.buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ARP_TPA,arp.getSenderProtocolAddress()).build();
-			}
-			ArrayList<OFAction> list = new ArrayList<>();
-			list.add(factory.actions().buildOutput().setPort(inPort).build());
-			OFFlowAdd flowAdd = factory.buildFlowAdd().setTableId(TableId.of(1)).setHardTimeout(0).setIdleTimeout(10).setPriority(30).setActions(list).setMatch(match).build();
-			sw.write(flowAdd);
+			arpForwarding.processPacketInMessage(sw,pi,cntx,portIPMap);
 		} 
 
 		/* if we get a dhcp request from a port it means a 
@@ -242,6 +224,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		portIPMap = new PortIPTable();
 		macPortTable = new MacPortTable();
 		dhcp = new ARPDHCP(context);
+		arpForwarding = new ArpForwarding(context,switchService);
 	}
 
 	@Override
