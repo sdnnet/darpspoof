@@ -14,6 +14,7 @@ import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFPacketOut;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
@@ -49,6 +50,7 @@ import net.floodlightcontroller.routing.IRoutingDecisionChangedListener;
 import net.floodlightcontroller.routing.IRoutingService;
 import net.floodlightcontroller.routing.Path;
 import net.floodlightcontroller.util.OFMessageDamper;
+import net.floodlightcontroller.util.OFMessageUtils;
 
 public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDiscoveryListener {
 	protected int FLOWMOD_DEFAULT_PRIORITY = 30;
@@ -404,11 +406,56 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 			OFFactory factory = sw.getOFFactory();
 			OFPort outPort = paths.get(indx).getPortId();
 			ArrayList<OFAction> list = new ArrayList<>();
-			list.add(factory.actions().buildOutput().setPort(outPort).build());
+			list.add(factory.actions().buildOutput().setPort(outPort).setMaxLen(Integer.MAX_VALUE).build());
 			OFFlowAdd flowAdd = factory.buildFlowAdd().setTableId(DEFAULT_TABLE_ID).setMatch(match).setHardTimeout(FLOWMOD_DEFAULT_HARD_TIMEOUT).setIdleTimeout(FLOWMOD_DEFAULT_IDLE_TIMEOUT).setCookie(cookie).setActions(list).setBufferId(OFBufferId.NO_BUFFER).build();
-			sw.write(flowAdd);
+			messageDamper.write(sw, flowAdd);
 		}
+		OFPort outPort = paths.get(1).getPortId();
+                pushPacket(initSwitch, pi, outPort, true, cntx);
 		return true;
+	}
+	protected void pushPacket(IOFSwitch sw, OFPacketIn pi, OFPort outport, boolean useBufferedPacket, FloodlightContext cntx) {
+		if (pi == null) {
+			return;
+		}
+
+		// The assumption here is (sw) is the switch that generated the
+		// packet-in. If the input port is the same as output port, then
+		// the packet-out should be ignored.
+		if ((pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort() : pi.getMatch().get(MatchField.IN_PORT)).equals(outport)) {
+			if (log.isDebugEnabled()) {
+				log.debug("Attempting to do packet-out to the same " +
+						"interface as packet-in. Dropping packet. " +
+						" SrcSwitch={}, pi={}",
+						new Object[]{sw, pi});
+				return;
+			}
+		}
+
+		if (log.isTraceEnabled()) {
+			log.trace("PacketOut srcSwitch={} pi={}",
+					new Object[] {sw, pi});
+		}
+
+		OFPacketOut.Builder pob = sw.getOFFactory().buildPacketOut();
+		List<OFAction> actions = new ArrayList<>();
+		actions.add(sw.getOFFactory().actions().output(outport, Integer.MAX_VALUE));
+		pob.setActions(actions);
+
+		/* Use packet in buffer if there is a buffer ID set */
+		if (useBufferedPacket) {
+			pob.setBufferId(pi.getBufferId()); /* will be NO_BUFFER if there isn't one */
+		} else {
+			pob.setBufferId(OFBufferId.NO_BUFFER);
+		}
+
+		if (pob.getBufferId().equals(OFBufferId.NO_BUFFER)) {
+			byte[] packetData = pi.getData();
+			pob.setData(packetData);
+		}
+
+		OFMessageUtils.setInPort(pob, OFMessageUtils.getInPort(pi));
+		messageDamper.write(sw, pob.build());
 	}
 	protected U64 makeForwardingCookie(IRoutingDecision decision, U64 flowSetId) {
 		long user_fields = 0;
