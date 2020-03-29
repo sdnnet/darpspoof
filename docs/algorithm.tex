@@ -4,6 +4,29 @@
 \addbibresource{first.bib}
 \usepackage[margin=2cm]{geometry}
 \usepackage{titling}
+\usepackage{listings}
+\usepackage{color}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=tb,
+  language=Python,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
 
 \title{Algorithm For D-ARPSpoof}
 
@@ -100,6 +123,24 @@ Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
 \begin{enumerate}
 	\item Write flow rule to forward all ARP packets to controller in flow table 1 of added switch with priority 0. (Default flow for table 1) 
 \end{enumerate}
+
+\subsection{Handling ARP}
+
+\begin{enumerate}
+	\item Check for packet's target protocol address and vlan id in ipPortTable. If not present then drop it otherwise get $<$Switch-Port$>$ pair associated with it. Name it destination.
+	\item Get $<$Switch-Port$>$ pair associated with packet's sender protcol address and vlan id. Name it source.
+	\item Get the path from source to destination using routing service and name it `path'.
+	\item Install the rules as:
+		\begin{lstlisting}
+			Match m = (EtherType,ARP) + (Vlan-id , Packet vlan-id)+(ArpTargetProtocolAddress , Packet ArpTargetProtocolAddress);
+			List<SwitchPortPair> list = path;
+			for(index = list.size-1;index>0;index-=2){
+				installFlowRule(table-id=2, match=m, switch=list[index].switch, priority=30, action=output(list[index].port);
+			}
+			pushPacket(switch=curSwitch, packet=packet-in, outPort=list[1].port, inPort=list[0].port);
+		\end{lstlisting}
+\end{enumerate}
+
 
 \subsection{Handling Switch Removed event}
 
