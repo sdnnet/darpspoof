@@ -63,7 +63,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 	protected OFMessageDamper messageDamper;
 	private IRoutingService routingService;
 	private	ILinkDiscoveryService linkService;
-	private	TableId DEFAULT_TABLE_ID = TableId.of(2);
+	private	TableId DEFAULT_TABLE_ID = TableId.of(1);
 	private static final short DECISION_BITS = 24;
 	private static final short DECISION_SHIFT = 0;
 	private static final long DECISION_MASK = ((1L << DECISION_BITS) - 1) << DECISION_SHIFT;
@@ -387,16 +387,23 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 				return Command.STOP;
 			}
 			IRoutingDecision decision = IRoutingDecision.rtStore.get(cntx, IRoutingDecision.CONTEXT_DECISION);
-			IRoutingDecision.RoutingAction rAction = decision.getRoutingAction();
-			if(rAction.equals(IRoutingDecision.RoutingAction.DROP)){
-				return Command.CONTINUE;
-			}else if(rAction.equals(IRoutingDecision.RoutingAction.NONE)){
-				return Command.CONTINUE;
+			if(decision !=null){
+				IRoutingDecision.RoutingAction rAction = decision.getRoutingAction();
+				if(rAction.equals(IRoutingDecision.RoutingAction.DROP)){
+					return Command.CONTINUE;
+				}else if(rAction.equals(IRoutingDecision.RoutingAction.NONE)){
+					return Command.CONTINUE;
+				}
 			}
 			U64 flowId = flowRegistry.generateFlowSetId();
 			U64 cookie = makeForwardingCookie(decision,flowId);
 			Path path = routingService.getPath(srcTuple.getNodeId(),srcTuple.getPortId(),destTuple.getNodeId(),destTuple.getPortId());
-			Match match = sw.getOFFactory().buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_TPA,arp.getTargetProtocolAddress()).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).build();
+			Match match;
+			if(vid.equals(VlanVid.ZERO)){
+				match = sw.getOFFactory().buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_TPA,arp.getTargetProtocolAddress()).setExact(MatchField.VLAN_VID,OFVlanVidMatch.UNTAGGED).build();
+			}else{
+				match = sw.getOFFactory().buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_TPA,arp.getTargetProtocolAddress()).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).build();
+			}
 			if(path.getPath().isEmpty()){
 				return Command.CONTINUE;
 			}
@@ -421,7 +428,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 			OFPort outPort = paths.get(indx).getPortId();
 			ArrayList<OFAction> list = new ArrayList<>();
 			list.add(factory.actions().buildOutput().setPort(outPort).setMaxLen(Integer.MAX_VALUE).build());
-			OFFlowAdd flowAdd = factory.buildFlowAdd().setTableId(DEFAULT_TABLE_ID).setMatch(match).setHardTimeout(FLOWMOD_DEFAULT_HARD_TIMEOUT).setIdleTimeout(FLOWMOD_DEFAULT_IDLE_TIMEOUT).setCookie(cookie).setActions(list).setBufferId(OFBufferId.NO_BUFFER).build();
+			OFFlowAdd flowAdd = factory.buildFlowAdd().setTableId(DEFAULT_TABLE_ID).setMatch(match).setHardTimeout(FLOWMOD_DEFAULT_HARD_TIMEOUT).setIdleTimeout(FLOWMOD_DEFAULT_IDLE_TIMEOUT).setCookie(cookie).setActions(list).setBufferId(OFBufferId.NO_BUFFER).setPriority(FLOWMOD_DEFAULT_PRIORITY).build();
 			messageDamper.write(sw, flowAdd);
 		}
 		OFPort outPort = paths.get(1).getPortId();

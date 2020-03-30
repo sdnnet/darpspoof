@@ -67,13 +67,13 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 	@Override
 	public boolean isCallbackOrderingPrereq(OFType type, String name) {
-		return false;
+		return (type.equals(OFType.PACKET_IN) && (name.equals("topology") || name.equals("devicemanager")));
 	}
 
 	//This module will get packet before forwarding module
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		return true;
+		return name.equals("forwarding") || name.equals("dhcpserver");
 	}
 
 	private void removePortFlow(IOFSwitch sw,OFPort port, VlanVid vid){
