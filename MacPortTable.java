@@ -31,15 +31,13 @@ public class MacPortTable{
 	}
 	public void removeSwitch(DatapathId id){
 		Iterator<Entry<MacAddress,HashMap<VlanVid,SwitchPortPair>>> itr = map.entrySet().iterator();
-		if(itr!=null){
-			while(itr.hasNext()){
-				Entry<MacAddress,HashMap<VlanVid,SwitchPortPair>> ent = itr.next();
-				HashMap<VlanVid,SwitchPortPair> internalMap = ent.getValue();
-				internalMap.entrySet() .removeIf(entry -> (id.equals(entry.getValue().getSwitch()))); 
-				if(internalMap.isEmpty()){
-					map.remove(ent.getKey());
-				}
+		while(itr.hasNext()){
+			HashMap<VlanVid,SwitchPortPair> internalMap = itr.next().getValue();
+			Iterator<Entry<VlanVid,SwitchPortPair>> internalItr = internalMap.entrySet().iterator();
+			while(internalItr.hasNext()){
+				if(internalItr.next().getValue().getSwitch().equals(id)) internalItr.remove();
 			}
+			if(internalMap.isEmpty()) itr.remove();
 		}
 	}
 	public boolean deleteMacEntry(MacAddress addr){

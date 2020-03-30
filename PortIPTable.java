@@ -114,18 +114,14 @@ public class PortIPTable{
 		return exist;
 	}
 	private boolean remove(ArrayList<VlanIPPair> list,VlanVid vid){
-		VlanIPPair tmpPair = null;
 		Iterator<VlanIPPair> itr = list.iterator();
 		while(itr.hasNext()){
-			VlanIPPair pair = itr.next();
-			if(pair.getVid() == vid) {
-				tmpPair = pair;
-				break;
+			if(itr.next().getVid().equals(vid)) {
+				itr.remove();
+				return true;
 			}
 		}
-		if(tmpPair == null) return false;
-		list.remove(tmpPair);
-		return true;
+		return false;
 	}
 	/*
 	private boolean remove(ArrayList<VlanIPPair> list,IPv4Address addr){
