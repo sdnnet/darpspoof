@@ -115,11 +115,9 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 					macPortTable.removeVid(tmpMac,vid);
 				}
 				if(!macPortTable.vidExists(eth.getSourceMACAddress(),vid)){
-					log.info("GOT REQUEST: {}",eth.getSourceMACAddress());
 					macPortTable.addEntry(eth.getSourceMACAddress(),vid,sw.getId(),inPort);
 				}
 			}else if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.ACK)){
-				log.info("GOT ACK: {}",eth.getDestinationMACAddress());
 				handleDHCPACK(eth,payload);
 			}
 		}
@@ -155,7 +153,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		ArrayList<OFInstruction> insSet  = new ArrayList<>();
 		insSet.add(factory.instructions().buildGotoTable().setTableId(TableId.of(1)).build());
 		if(vid.equals(VlanVid.ZERO)){
-			log.info("FOUND WITHOUT ANY VLAN");
 			match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.UNTAGGED).setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_SPA,addr).build();
 		}else{
 			match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_SPA,addr).build();
