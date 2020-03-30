@@ -9,18 +9,20 @@ import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.VlanVid;
 
+import net.floodlightcontroller.core.types.NodePortTuple;
+
 public class MacPortTable{
-	private HashMap<MacAddress,HashMap<VlanVid,SwitchPortPair>> map;
+	private HashMap<MacAddress,HashMap<VlanVid,NodePortTuple>> map;
 	public MacPortTable(){
 		map = new HashMap<>();
 	}
 	public boolean vidExists(MacAddress addr,VlanVid vid){
-		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(addr);
+		HashMap<VlanVid,NodePortTuple> internalMap = map.get(addr);
 		if(internalMap == null) return false;
 		return internalMap.containsKey(vid);
 	}
 	public boolean removeVid(MacAddress addr,VlanVid vid){
-		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(addr);
+		HashMap<VlanVid,NodePortTuple> internalMap = map.get(addr);
 		if(internalMap == null) return false;
 		if(!internalMap.containsKey(vid)) return false;
 		internalMap.remove(vid);
@@ -30,12 +32,12 @@ public class MacPortTable{
 		return true;
 	}
 	public void removeSwitch(DatapathId id){
-		Iterator<Entry<MacAddress,HashMap<VlanVid,SwitchPortPair>>> itr = map.entrySet().iterator();
+		Iterator<Entry<MacAddress,HashMap<VlanVid,NodePortTuple>>> itr = map.entrySet().iterator();
 		while(itr.hasNext()){
-			HashMap<VlanVid,SwitchPortPair> internalMap = itr.next().getValue();
-			Iterator<Entry<VlanVid,SwitchPortPair>> internalItr = internalMap.entrySet().iterator();
+			HashMap<VlanVid,NodePortTuple> internalMap = itr.next().getValue();
+			Iterator<Entry<VlanVid,NodePortTuple>> internalItr = internalMap.entrySet().iterator();
 			while(internalItr.hasNext()){
-				if(internalItr.next().getValue().getSwitch().equals(id)) internalItr.remove();
+				if(internalItr.next().getValue().getNodeId().equals(id)) internalItr.remove();
 			}
 			if(internalMap.isEmpty()) itr.remove();
 		}
@@ -45,19 +47,19 @@ public class MacPortTable{
 		map.remove(addr);
 		return true;
 	}
-	public SwitchPortPair getPortForMac(MacAddress mac,VlanVid vid){
-		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(mac);
+	public NodePortTuple getPortForMac(MacAddress mac,VlanVid vid){
+		HashMap<VlanVid,NodePortTuple> internalMap = map.get(mac);
 		return internalMap.get(vid);
 	}
 	public boolean addEntry(MacAddress addr,VlanVid vid,DatapathId dpid,OFPort port){
-		HashMap<VlanVid,SwitchPortPair> internalMap = map.get(addr);
+		HashMap<VlanVid,NodePortTuple> internalMap = map.get(addr);
 		if(internalMap == null){
 			map.put(addr,new HashMap<>());
 			internalMap = map.get(addr);
 		}
 		boolean exist = false;
 		if(internalMap.containsKey(vid)) exist = true;
-		internalMap.put(vid,new SwitchPortPair(dpid,port));
+		internalMap.put(vid,new NodePortTuple(dpid,port));
 		return exist;
 	}
 }

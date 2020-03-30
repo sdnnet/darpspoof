@@ -41,6 +41,7 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.packet.DHCP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.restserver.IRestApiService;
@@ -76,9 +77,9 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		return name.equals("forwarding") || name.equals("dhcpserver");
 	}
 
-	private void removePortFlow(IOFSwitch sw,OFPort port, VlanVid vid){
+	private void removePortFlow(IOFSwitch sw,OFPort port){
 		OFFactory factory = sw.getOFFactory();
-		Match match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).setExact(MatchField.ETH_TYPE,EthType.ARP).setMasked(MatchField.ARP_SPA,IPv4AddressWithMask.of("0.0.0.0")).build();
+		Match match = factory.buildMatch().setExact(MatchField.IN_PORT,port).setExact(MatchField.ETH_TYPE,EthType.ARP).build();
 		OFFlowDelete flowDel = factory.buildFlowDelete().setMatch(match).build();
 		sw.write(flowDel);
 	}
@@ -108,7 +109,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.REQUEST)){
 				if(portIPMap.vlanExists(sw.getId(),inPort,VlanVid.ofVlan(eth.getVlanID()))){
-					removePortFlow(sw,inPort,vid);
+					removePortFlow(sw,inPort);
 					MacAddress tmpMac = portIPMap.getMacForVlan(sw.getId(),inPort,vid);
 					portIPMap.remove(sw.getId(),inPort,VlanVid.ofVlan(eth.getVlanID()));
 					macPortTable.removeVid(tmpMac,vid);
@@ -135,13 +136,13 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	 */
 	private void handleDHCPACK(Ethernet eth,DHCP payload){
 		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
-		SwitchPortPair pair = macPortTable.getPortForMac(eth.getDestinationMACAddress(),vid);
-		portIPMap.addEntry(pair.getSwitch(),pair.getPort(),new VlanIPPair(vid,payload.getYourIPAddress(),eth.getDestinationMACAddress()));
-		IOFSwitch sw = switchService.getSwitch(pair.getSwitch());
+		NodePortTuple pair = macPortTable.getPortForMac(eth.getDestinationMACAddress(),vid);
+		portIPMap.addEntry(pair.getNodeId(),pair.getPortId(),new VlanIPPair(vid,payload.getYourIPAddress(),eth.getDestinationMACAddress()));
+		IOFSwitch sw = switchService.getSwitch(pair.getNodeId());
 		if(sw!=null){
-			installProactiveRules(sw,pair.getPort(),vid,payload.getYourIPAddress());
+			installProactiveRules(sw,pair.getPortId(),vid,payload.getYourIPAddress());
 		}else{
-			switchRemoved(pair.getSwitch());
+			switchRemoved(pair.getNodeId());
 		}
 	}
 
