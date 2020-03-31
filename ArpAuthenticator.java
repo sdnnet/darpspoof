@@ -48,9 +48,11 @@ import net.floodlightcontroller.restserver.IRestApiService;
 //import net.floodlightcontroller.sdn_arp_spoof_detection.web.*;
 
 import java.util.HashMap;
+import java.util.List;
 
 import net.floodlightcontroller.dhcpserver.*;
-public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IOFSwitchListener{
+import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryListener;
+public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IOFSwitchListener,ILinkDiscoveryListener{
 	protected IOFSwitchService switchService;
 	protected static Logger log = LoggerFactory.getLogger(ArpAuthenticator.class);
 	protected IRestApiService restApiService;
@@ -89,7 +91,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
 		OFPort inPort = (pi.getVersion().compareTo(OFVersion.OF_12) < 0 ? pi.getInPort()
 				: pi.getMatch().get(MatchField.IN_PORT));
-		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
 
 		if(eth.getEtherType().equals(EthType.ARP)){
 			arpForwarding.processPacketInMessage(sw,pi,cntx,portIPMap);
@@ -108,14 +109,14 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		else if(DHCPServerUtils.isDHCPPacketIn(eth)){
 			DHCP payload = DHCPServerUtils.getDHCPayload(eth);
 			if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.REQUEST)){
-				if(portIPMap.vlanExists(sw.getId(),inPort,VlanVid.ofVlan(eth.getVlanID()))){
+				if(portIPMap.portExists(sw.getId(),inPort)){
 					removePortFlow(sw,inPort);
-					MacAddress tmpMac = portIPMap.getMacForVlan(sw.getId(),inPort,vid);
-					portIPMap.remove(sw.getId(),inPort,VlanVid.ofVlan(eth.getVlanID()));
-					macPortTable.removeVid(tmpMac,vid);
+					MacAddress tmpMac = portIPMap.getMac(sw.getId(),inPort);
+					portIPMap.remove(sw.getId(),inPort);
+					macPortTable.removeMac(tmpMac);
 				}
-				if(!macPortTable.vidExists(eth.getSourceMACAddress(),vid)){
-					macPortTable.addEntry(eth.getSourceMACAddress(),vid,sw.getId(),inPort);
+				if(!macPortTable.macExists(eth.getSourceMACAddress())){
+					macPortTable.addEntry(eth.getSourceMACAddress(),sw.getId(),inPort);
 				}
 			}else if(DHCPServerUtils.getMessageType(payload).equals(IDHCPService.MessageType.ACK)){
 				handleDHCPACK(eth,payload);
@@ -134,7 +135,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	 */
 	private void handleDHCPACK(Ethernet eth,DHCP payload){
 		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
-		NodePortTuple pair = macPortTable.getPortForMac(eth.getDestinationMACAddress(),vid);
+		NodePortTuple pair = macPortTable.getPortForMac(eth.getDestinationMACAddress());
 		portIPMap.addEntry(pair.getNodeId(),pair.getPortId(),new VlanIPPair(vid,payload.getYourIPAddress(),eth.getDestinationMACAddress()));
 		IOFSwitch sw = switchService.getSwitch(pair.getNodeId());
 		if(sw!=null){
@@ -281,6 +282,45 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 	@Override
 	public void switchDeactivated(DatapathId switchId) {
 
+	}
+
+	@Override
+	public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
+		/*
+		for(LDUpdate update : updateList){
+			DatapathId srcSw = update.getSrc();
+			DatapathId destSw = update.getDst();
+			OFPort srcPort = update.getSrcPort();
+			OFPort destPort = update.getDstPort();
+			if((!portIPMap.portExists(srcSw,srcPort)) && (!portIPMap.portExists(destSw,destPort))){
+				continue;
+			}else if(!update.getType().equals(LinkType.DIRECT_LINK)){
+				continue;
+			}
+			if(portIPMap.portExists(srcSw,srcPort)){
+				IOFSwitch sw = switchService.getSwitch(srcSw);
+				if(sw!=null){
+					removePortFlow(sw,srcPort);
+					MacAddress tmpMac = portIPMap.getMacForVlan(srcSw,inPort,vid);
+					portIPMap.remove(srcSw,srcPort);
+					macPortTable.removeVid(tmpMac,vid);
+				}else{
+					log.warn("Switch Removed without notification");
+				}
+			}
+			if(portIPMap.portExists(destSw,destPort)){
+				IOFSwitch sw = switchService.getSwitch(destSw);
+				if(sw!=null){
+					removePortFlow(sw,destPort);
+					MacAddress tmpMac = portIPMap.getMacForVlan(destSw,inPort,vid);
+					portIPMap.remove(destSw,destPort);
+					macPortTable.removeVid(tmpMac,vid);
+				}else{
+					log.warn("Switch Removed without notification");
+				}
+			}
+		}*/
+		arpForwarding.linkDiscoveryUpdate(updateList);
 	}
 
 }

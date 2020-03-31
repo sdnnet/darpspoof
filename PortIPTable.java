@@ -1,6 +1,5 @@
 package net.floodlightcontroller.sdn_arp_spoof_detection;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 
@@ -13,7 +12,7 @@ import org.projectfloodlight.openflow.types.VlanVid;
 import net.floodlightcontroller.core.types.NodePortTuple;
 
 public class PortIPTable{
-	private HashMap<DatapathId,HashMap<OFPort,ArrayList<VlanIPPair>>> map;
+	private HashMap<DatapathId,HashMap<OFPort,VlanIPPair>> map;
 	public PortIPTable(){
 		map = new HashMap<>();
 	}
@@ -21,32 +20,28 @@ public class PortIPTable{
 		Iterator<DatapathId> switchItr = map.keySet().iterator();
 		while(switchItr.hasNext()){
 			DatapathId dpid = switchItr.next();
-			HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(dpid);
+			HashMap<OFPort,VlanIPPair> internalMap = map.get(dpid);
 			Iterator<OFPort> portItr = internalMap.keySet().iterator();
 			while(portItr.hasNext()){
 				OFPort port = portItr.next();
-				ArrayList<VlanIPPair> list = internalMap.get(port);
-				for(VlanIPPair pair : list){
-					if(pair.getIP().equals(addr)&&pair.getVid().equals(vid)) return new NodePortTuple(dpid,port);
-				}
+				VlanIPPair pair = internalMap.get(port);
+				if(pair.getIP().equals(addr) && pair.getVid().equals(vid)) return new NodePortTuple(dpid,port);
 			}
 		}
 		return null;
 	}
 	public boolean addEntry(DatapathId id,OFPort port,VlanIPPair pair){
-		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
+		HashMap<OFPort,VlanIPPair> internalMap = map.get(id);
 		if(internalMap == null){
 			map.put(id,new HashMap<>());
 			internalMap = map.get(id);
 		}
-		ArrayList<VlanIPPair> list = internalMap.get(port);
-		if(list == null){
-			internalMap.put(port,new ArrayList<>());
-			list = internalMap.get(port);
-		}
+		VlanIPPair tablePair = internalMap.get(port);
 		boolean exist = false;
-		exist = (vlanExists(id,port,pair.getVid()));
-		list.add(pair);
+		if(tablePair != null){
+			exist = true;
+		}
+		internalMap.put(port,pair);
 		return exist;
 	}
 	public boolean remove(DatapathId id){
@@ -59,7 +54,7 @@ public class PortIPTable{
 	public boolean remove(DatapathId id,OFPort port){
 		boolean exist = map.containsKey(id);
 		if(exist){
-			HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
+			HashMap<OFPort,VlanIPPair> internalMap = map.get(id);
 			exist = exist && (internalMap != null);
 			if(exist){
 				internalMap.remove(port);
@@ -74,10 +69,10 @@ public class PortIPTable{
 	public boolean remove(DatapathId id,OFPort port,IPv4Address addr){
 		boolean exist = map.containsKey(id);
 		if(exist){
-			HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
+			HashMap<OFPort,VlanIPPair> internalMap = map.get(id);
 			exist = exist && (internalMap != null);
 			if(exist){
-				ArrayList<VlanIPPair> list = internalMap.get(port);
+				VlanIPPair list = internalMap.get(port);
 				exist = exist && (list != null);
 				if(exist){
 					remove(list,addr);
@@ -92,39 +87,8 @@ public class PortIPTable{
 		}
 		return exist;
 	}*/
-	public boolean remove(DatapathId id,OFPort port,VlanVid vid){
-		boolean exist = map.containsKey(id);
-		if(exist){
-			HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
-			exist = exist && (internalMap != null);
-			if(exist){
-				ArrayList<VlanIPPair> list = internalMap.get(port);
-				exist = exist && (list != null);
-				if(exist){
-					remove(list,vid);
-					if(list.isEmpty()){
-						internalMap.remove(port);
-						if(internalMap.isEmpty()){
-							map.remove(id);
-						}
-					}
-				}
-			}
-		}
-		return exist;
-	}
-	private boolean remove(ArrayList<VlanIPPair> list,VlanVid vid){
-		Iterator<VlanIPPair> itr = list.iterator();
-		while(itr.hasNext()){
-			if(itr.next().getVid().equals(vid)) {
-				itr.remove();
-				return true;
-			}
-		}
-		return false;
-	}
 	/*
-	private boolean remove(ArrayList<VlanIPPair> list,IPv4Address addr){
+	private boolean remove(VlanIPPair list,IPv4Address addr){
 		VlanIPPair tmpPair = null;
 		Iterator<VlanIPPair> itr = list.iterator();
 		while(itr.hasNext()){
@@ -143,52 +107,31 @@ public class PortIPTable{
 	}
 	public boolean portExists(DatapathId id,OFPort port){
 		if(!switchExists(id)) return false;
-		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
+		HashMap<OFPort,VlanIPPair> internalMap = map.get(id);
 		if(internalMap.containsKey(port)) return true;
 		return false;
 	}
 	public boolean vlanExists(DatapathId id, OFPort port,VlanVid vid){
-		if(!switchExists(id)) return false;
-		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
-		if(!internalMap.containsKey(port)) return false;
-		ArrayList<VlanIPPair> list = internalMap.get(port);
-		for(VlanIPPair pair : list){
-			if(pair.getVid() == vid) return true;
-		}
+		VlanIPPair pair = getVlanIpPair(id,port);
+		if(pair==null) return false;
+		if(pair.getVid().equals(vid)) return true;
 		return false;
 	}
 	public boolean IPExists(DatapathId id,OFPort port, IPv4Address addr){
-		if(!switchExists(id)) return false;
-		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
-		if(!internalMap.containsKey(port)) return false;
-		ArrayList<VlanIPPair> list = internalMap.get(port);
-		for(VlanIPPair pair : list){
-			if(pair.getIP() == addr) return true;
-		}
+		VlanIPPair pair = getVlanIpPair(id,port);
+		if(pair==null) return false;
+		if(pair.getIP().equals(addr)) return true;
 		return false;
 	}
-	public IPv4Address getIpForVlan(DatapathId id,OFPort port, VlanVid vid){
-		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
+	public VlanIPPair getVlanIpPair(DatapathId id,OFPort port){
+		HashMap<OFPort,VlanIPPair> internalMap = map.get(id);
 		if(internalMap == null) return null;
-		ArrayList<VlanIPPair> list = internalMap.get(port);
-		if(list == null) return null;
-		for(VlanIPPair pair : list){
-			if(pair.getVid() == vid){
-				return pair.getIP();
-			}
-		}
-		return null;
+		VlanIPPair list = internalMap.get(port);
+		return list;
 	}
-	public MacAddress getMacForVlan(DatapathId id,OFPort port, VlanVid vid){
-		HashMap<OFPort,ArrayList<VlanIPPair>> internalMap = map.get(id);
-		if(internalMap == null) return null;
-		ArrayList<VlanIPPair> list = internalMap.get(port);
-		if(list == null) return null;
-		for(VlanIPPair pair : list){
-			if(pair.getVid() == vid){
-				return pair.getMac();
-			}
-		}
-		return null;
+	public MacAddress getMac(DatapathId id,OFPort port){
+		VlanIPPair pair = getVlanIpPair(id,port);
+		if(pair==null) return null;
+		return pair.getMac();
 	}
 }

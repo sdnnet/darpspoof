@@ -44,8 +44,8 @@ import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.core.util.AppCookie;
-import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryListener;
-import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
+import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.LDUpdate;
+import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.UpdateOperation;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.routing.IRoutingDecision;
@@ -55,14 +55,13 @@ import net.floodlightcontroller.routing.Path;
 import net.floodlightcontroller.util.OFMessageDamper;
 import net.floodlightcontroller.util.OFMessageUtils;
 
-public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDiscoveryListener {
+public class ArpForwarding implements IRoutingDecisionChangedListener{
 	protected int FLOWMOD_DEFAULT_PRIORITY = 30;
 	protected int FLOWMOD_DEFAULT_HARD_TIMEOUT = 0;
 	protected int FLOWMOD_DEFAULT_IDLE_TIMEOUT = 10;
 	protected static Logger log;
 	protected OFMessageDamper messageDamper;
 	private IRoutingService routingService;
-	private	ILinkDiscoveryService linkService;
 	private	TableId DEFAULT_TABLE_ID = TableId.of(1);
 	private static final short DECISION_BITS = 24;
 	private static final short DECISION_SHIFT = 0;
@@ -178,9 +177,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 	protected FlowSetIdRegistry flowRegistry;
 	public ArpForwarding(FloodlightModuleContext context,IOFSwitchService switchService){
 		routingService = context.getServiceImpl(IRoutingService.class);
-		linkService = context.getServiceImpl(ILinkDiscoveryService.class);
 		routingService.addRoutingDecisionChangedListener(this);
-		linkService.addListener(this);
 		this.switchService = switchService;
 		log = LoggerFactory.getLogger(ArpAuthenticator.class);
 		messageDamper = new OFMessageDamper(OFMESSAGE_DAMPER_CAPACITY,EnumSet.of(OFType.FLOW_MOD),OFMESSAGE_DAMPER_TIMEOUT);
@@ -226,7 +223,6 @@ public class ArpForwarding implements IRoutingDecisionChangedListener, ILinkDisc
 
 	}
 
-	@Override
 	public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
 		for(LDUpdate update : updateList){
 			if(update!=null && (update.getOperation() == UpdateOperation.LINK_REMOVED || update.getOperation() == UpdateOperation.TUNNEL_PORT_REMOVED || update.getOperation() == UpdateOperation.PORT_DOWN)){
