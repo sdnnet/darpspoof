@@ -106,6 +106,7 @@ public class PortIPTable{
 		return map.containsKey(id);
 	}
 	public boolean portExists(DatapathId id,OFPort port){
+		if(id==null || port == null) return false;
 		if(!switchExists(id)) return false;
 		HashMap<OFPort,VlanIPPair> internalMap = map.get(id);
 		if(internalMap.containsKey(port)) return true;

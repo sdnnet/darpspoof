@@ -286,7 +286,6 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 	@Override
 	public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
-		/*
 		for(LDUpdate update : updateList){
 			DatapathId srcSw = update.getSrc();
 			DatapathId destSw = update.getDst();
@@ -294,16 +293,17 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 			OFPort destPort = update.getDstPort();
 			if((!portIPMap.portExists(srcSw,srcPort)) && (!portIPMap.portExists(destSw,destPort))){
 				continue;
-			}else if(!update.getType().equals(LinkType.DIRECT_LINK)){
+			}
+			if(!update.getType().equals(LinkType.DIRECT_LINK)){
 				continue;
 			}
 			if(portIPMap.portExists(srcSw,srcPort)){
 				IOFSwitch sw = switchService.getSwitch(srcSw);
 				if(sw!=null){
 					removePortFlow(sw,srcPort);
-					MacAddress tmpMac = portIPMap.getMacForVlan(srcSw,inPort,vid);
+					MacAddress tmpMac = portIPMap.getMac(srcSw,srcPort);
 					portIPMap.remove(srcSw,srcPort);
-					macPortTable.removeVid(tmpMac,vid);
+					macPortTable.removeMac(tmpMac);
 				}else{
 					log.warn("Switch Removed without notification");
 				}
@@ -312,14 +312,14 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 				IOFSwitch sw = switchService.getSwitch(destSw);
 				if(sw!=null){
 					removePortFlow(sw,destPort);
-					MacAddress tmpMac = portIPMap.getMacForVlan(destSw,inPort,vid);
+					MacAddress tmpMac = portIPMap.getMac(destSw,destPort);
 					portIPMap.remove(destSw,destPort);
-					macPortTable.removeVid(tmpMac,vid);
+					macPortTable.removeMac(tmpMac);
 				}else{
 					log.warn("Switch Removed without notification");
 				}
 			}
-		}*/
+		}
 		arpForwarding.linkDiscoveryUpdate(updateList);
 	}
 
