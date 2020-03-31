@@ -44,8 +44,8 @@
 \section{Data Structures Used}
 
 \begin{enumerate}
-	\item HashMap$<$OFPort,ArrayList$<$Vlan, IP, Mac$>$$>$ : ipPortMap
-	\item HashMap$<$MacAddress,HashMap$<$Vlan,Switch-Port$>$$>$ : macPortMap
+	\item HashMap$<$DatapathId,HashMap$<$OFPort,$<$Vlan, IP, Mac$>$$>$ : portIpMap
+	\item HashMap$<$MacAddress,Switch-Port$>$ : macPortMap
 \end{enumerate}
 
 \section{Algorithm}
@@ -61,14 +61,14 @@
 	\item \textbf{DHCP REQUEST}
 
 		\begin{enumerate}
-			\item Delete the mapped mac address for inPort and incoming packet's MAC Address from macPortMap.
-			\item If ipPortMap has entry for inPort and incomingPacket's vlan ID then delete that entry.
-			\item If macPortMap does not have any entry for incoming packet's source MAC Address and vlan id, then add those entry in macPortMap.
+			\item Delete mapped mac-port pair from macPortMap with mac equals source MAC of incoming Packet.
+			\item If portIpMap has entry for inPort then delete that entry.
+			\item If macPortMap does not have any entry for incoming packet's source MAC Address, then add those entry in macPortMap.
 		\end{enumerate}
 	\item \textbf{DHCP ACKNOWLEDGEMENT} \label{dhcp-ack}
 		\begin{enumerate}
-			\item Get Switch-Port pair from macPortMap for destination mac address and vlan id and name that as pair.
-			\item Add following entry in ipPortMap:
+			\item Get Switch-Port pair from macPortMap for destination mac address and name that as pair.
+			\item Add following entry in portIpMap:
 
 				\small{
 					$<$\textit{pair.switch} ,  \textit{pair.port} , vid , dhcpPayload.yourIPAddress , destination-MAC$>$
@@ -84,18 +84,18 @@
 	\item \textbf{DHCP REQUEST}
 
 		\begin{enumerate}
-			\item If ipPortMap has entry for received switch, input port and incomingPacket's vlan id then remove flow entry from current switch with :
+			\item If portIpMap has entry for received switch and input port then remove flow entry from current switch with :
 
 				\begin{itemize}
 					\item inPort : incomingPacket's input port.
-					\item vlan-vid : incomingPacket's vlan id
+					\item etherType: ARP
 				\end{itemize}
 				
 		\end{enumerate}
 	\item \textbf{DHCP ACKNOWLEDGEMENT}
 
 		\begin{enumerate}
-			\item Get Switch-Port pair from macPortMap for destination mac address and vlan id and name that as pair.
+			\item Get Switch-Port pair from macPortMap for destination mac address and name that as pair.
 			\item Then add a flow rule to block all ARP packet from the  current input port. Write this flow with priority 10.
 			\item Add flow in \textit{pair.switch} to direct the packet with 
 
@@ -146,7 +146,7 @@ Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
 \subsection{Handling Switch Removed event}
 
 \begin{enumerate}
-	\item Remove all entry of removed swith from ipPortMap
+	\item Remove all entry of removed swith from portIpMap
 	\item Also, Remove all entry of removed switch from macPortMap.
 \end{enumerate}
 
