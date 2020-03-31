@@ -150,5 +150,27 @@ Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
 	\item Also, Remove all entry of removed switch from macPortMap.
 \end{enumerate}
 
+\subsection{Handling link update}
+
+\begin{enumerate}
+	\item If any of source switch-port pair and destination switch-port pair exist in our portIPMap, and update type is direct link, then:
+		\begin{itemize}
+			\item If source switch exist in switch port pair:
+				\begin{enumerate}
+					\item remove any flow matching inPort to be source port from the respective source switch.
+					\item remove the mac from macPortMap associated with that switch port pair.
+					\item remove the switch-port pair from portIpMap also.
+				\end{enumerate}
+			\item If destination switch exist in switch port pair:
+				\begin{enumerate}
+					\item remove any flow matching inPort to be destination port from the respective destination switch.
+					\item remove the mac from macPortMap associated with that switch port pair.
+					\item remove the switch-port pair from portIpMap also.
+				\end{enumerate}
+		\end{itemize}
+		
+		
+\end{enumerate}
+
 \printbibliography
 \end{document}
