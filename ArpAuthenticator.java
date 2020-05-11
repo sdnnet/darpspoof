@@ -55,14 +55,13 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 
 	@Override
 	public boolean isCallbackOrderingPrereq(OFType type, String name) {
-		// TODO Auto-generated method stub
-		return false;
+		return (type.equals(OFType.PACKET_IN) && (name.equals("topology") || name.equals("devicemanager")));
 	}
 
+	//This module will get packet before forwarding module
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		// TODO Auto-generated method stub
-		return false;
+		return name.equals("forwarding") || name.equals("dhcpserver");
 	}
 	private Match createMatch(IOFSwitch sw,OFPort port){
 		OFFactory factory = sw.getOFFactory();
