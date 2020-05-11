@@ -41,6 +41,7 @@ import java.util.HashMap;
 
 import net.floodlightcontroller.dhcpserver.*;
 public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,IArpAuthenticatorService{
+	protected ARPDHCP dhcp;
 	protected static Logger log = LoggerFactory.getLogger(ArpAuthenticator.class);
 	protected IRestApiService restApiService;
 	protected IFloodlightProviderService floodlightProviderService;
@@ -195,6 +196,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		macMap = new HashMap<>();
 		switchMap = new HashMap<>();
+		dhcp = new ARPDHCP(context);
 
 	}
 
