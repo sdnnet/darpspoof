@@ -195,6 +195,7 @@ public class ArpAuthenticator implements IFloodlightModule, IOFMessageListener ,
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		macMap = new HashMap<>();
 		switchMap = new HashMap<>();
+
 	}
 
 	@Override
