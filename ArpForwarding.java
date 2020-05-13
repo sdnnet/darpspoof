@@ -386,9 +386,9 @@ public class ArpForwarding implements IRoutingDecisionChangedListener{
 			if(decision !=null){
 				IRoutingDecision.RoutingAction rAction = decision.getRoutingAction();
 				if(rAction.equals(IRoutingDecision.RoutingAction.DROP)){
-					return Command.CONTINUE;
+					return Command.STOP;
 				}else if(rAction.equals(IRoutingDecision.RoutingAction.NONE)){
-					return Command.CONTINUE;
+					return Command.STOP;
 				}
 			}
 			U64 flowId = flowRegistry.generateFlowSetId();
@@ -401,14 +401,14 @@ public class ArpForwarding implements IRoutingDecisionChangedListener{
 				match = sw.getOFFactory().buildMatch().setExact(MatchField.ETH_TYPE,EthType.ARP).setExact(MatchField.ARP_TPA,arp.getTargetProtocolAddress()).setExact(MatchField.VLAN_VID,OFVlanVidMatch.ofVlanVid(vid)).build();
 			}
 			if(path.getPath().isEmpty()){
-				return Command.CONTINUE;
+				return Command.STOP;
 			}
 			installRoute(match,sw,path,pi,cntx,cookie);
 			for(NodePortTuple npt : path.getPath()){
 				flowRegistry.registerFlowSetId(npt,flowId);
 			}
 		}
-		return Command.CONTINUE;
+		return Command.STOP;
 	}
 
 	private boolean installRoute(Match match,IOFSwitch initSwitch,Path path,OFPacketIn pi,FloodlightContext cntx,U64 cookie){
