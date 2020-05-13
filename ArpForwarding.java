@@ -375,6 +375,7 @@ public class ArpForwarding implements IRoutingDecisionChangedListener{
 		VlanVid vid = VlanVid.ofVlan(eth.getVlanID());
 		if(eth.getEtherType().equals(EthType.ARP)){
 			ARP arp = (ARP) eth.getPayload();
+			log.info("GOT message from {} to {}",arp.getSenderProtocolAddress(),arp.getTargetProtocolAddress());
 			NodePortTuple destTuple = portIpMap.getSwitchFor(vid,arp.getTargetProtocolAddress());
 			if(destTuple == null) return Command.STOP;
 			NodePortTuple srcTuple = portIpMap.getSwitchFor(vid,arp.getSenderProtocolAddress());
