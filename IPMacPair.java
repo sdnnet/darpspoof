@@ -38,4 +38,13 @@ public class IPMacPair{
 	public void setMac(MacAddress mac) {
 		this.mac = mac;
 	}
+
+	@Override
+	public boolean equals(Object ob){
+		if(ob instanceof IPMacPair){
+			IPMacPair pair = (IPMacPair) ob;
+			if(pair.ip.equals(ip) && pair.mac.equals(mac)) return true;
+		}
+		return false;
+	}
 }
