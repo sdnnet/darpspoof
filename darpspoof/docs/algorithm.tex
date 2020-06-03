@@ -1,0 +1,176 @@
+\documentclass{article}
+
+\usepackage[backend=biber]{biblatex}
+\addbibresource{first.bib}
+\usepackage[margin=2cm]{geometry}
+\usepackage{titling}
+\usepackage{listings}
+\usepackage{color}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=tb,
+  language=Python,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
+
+\title{Algorithm For D-ARPSpoof}
+
+\renewcommand{\maketitle}{
+
+	\begin{center}
+		{\huge\noindent\ignorespaces\textbf{\thetitle}\par}
+	\end{center}
+	\vspace{0.3in}
+	
+}
+\begin{document}
+\maketitle
+
+\section{Data Structures Used}
+
+\begin{enumerate}
+	\item HashMap$<$DatapathId,HashMap$<$OFPort,$<$Vlan, IP, Mac$>$$>$ : portIpMap
+	\item HashMap$<$MacAddress,Switch-Port$>$ : macPortMap
+\end{enumerate}
+
+\section{Algorithm}
+
+
+\subsection{Handling Packet-IN DHCP Messages}
+
+
+\subsubsection{Updating Data Structures} \label{dhcp-ds}
+
+
+\begin{itemize}
+	\item \textbf{DHCP REQUEST}
+
+		\begin{enumerate}
+			\item Delete mapped mac-port pair from macPortMap with mac equals source MAC of incoming Packet.
+			\item If portIpMap has entry for inPort then delete that entry.
+			\item If macPortMap does not have any entry for incoming packet's source MAC Address, then add those entry in macPortMap.
+		\end{enumerate}
+	\item \textbf{DHCP ACKNOWLEDGEMENT} \label{dhcp-ack}
+		\begin{enumerate}
+			\item Get Switch-Port pair from macPortMap for destination mac address and name that as pair.
+			\item Add following entry in portIpMap:
+
+				\small{
+					$<$\textit{pair.switch} ,  \textit{pair.port} , vid , dhcpPayload.yourIPAddress , destination-MAC$>$
+				}
+		\end{enumerate}
+
+\end{itemize}
+
+
+\subsubsection{Updating Flow Rules}
+
+\begin{itemize}
+	\item \textbf{DHCP REQUEST}
+
+		\begin{enumerate}
+			\item If portIpMap has entry for received switch and input port then remove flow entry from current switch with :
+
+				\begin{itemize}
+					\item inPort : incomingPacket's input port.
+					\item etherType: ARP
+				\end{itemize}
+				
+		\end{enumerate}
+	\item \textbf{DHCP ACKNOWLEDGEMENT}
+
+		\begin{enumerate}
+			\item Get Switch-Port pair from macPortMap for destination mac address and name that as pair.
+			\item Then add a flow rule to block all ARP packet from the  current input port. Write this flow with priority 10.
+			\item Add flow in \textit{pair.switch} to direct the packet with 
+
+				\begin{itemize}
+
+					\item IP address : dhcp-payload's yourIPAddress
+					\item vlan-vid : incomingPacket's vlan id 
+					\item inPort : \textit{pair.port}
+				\end{itemize}
+
+				to goto flow table 1 of \textit{pair.switch} . Write this flow with priority 20.
+		\end{enumerate}
+		
+\end{itemize}
+
+
+
+
+\subsection{Handling DHCP-ACK PacketOut Messages}
+
+Same as section \ref{dhcp-ds} DHCP ACKNOWLEDGEMENT handling.
+
+\subsection{Handling ARP}
+
+\begin{enumerate}
+	\item Check for packet's target protocol address and vlan id in ipPortTable. If not present then drop it otherwise get $<$Switch-Port$>$ pair associated with it. Name it destination.
+	\item Get $<$Switch-Port$>$ pair associated with packet's sender protcol address and vlan id. Name it source.
+	\item Get the path from source to destination using routing service and name it `path'.
+	\item Install the rules as:
+		\begin{lstlisting}
+			Match m = (EtherType,ARP) + (Vlan-id , Packet vlan-id)+(ArpTargetProtocolAddress , Packet ArpTargetProtocolAddress);
+			List<SwitchPortPair> list = path;
+			for(index = list.size-1;index>0;index-=2){
+				installFlowRule(table-id=2, match=m, switch=list[index].switch, priority=30, action=output(list[index].port);
+			}
+			pushOFPacketOut(switch=curSwitch, packet=packet-in, outPort=list[1].port, inPort=list[0].port);
+		\end{lstlisting}
+\end{enumerate}
+
+\subsection{Handling Switch Added event}
+
+\begin{enumerate}
+	\item Write flow rule to forward all ARP packets to controller in flow table 1 of added switch with priority 0. (Default flow for table 1) 
+\end{enumerate}
+
+
+
+\subsection{Handling Switch Removed event}
+
+\begin{enumerate}
+	\item Remove all entry of removed swith from portIpMap
+	\item Also, Remove all entry of removed switch from macPortMap.
+\end{enumerate}
+
+\subsection{Handling link update}
+
+\begin{enumerate}
+	\item If any of source switch-port pair and destination switch-port pair exist in our portIPMap, and update type is direct link, then:
+		\begin{itemize}
+			\item If source switch exist in switch port pair:
+				\begin{enumerate}
+					\item remove any flow matching inPort to be source port from the respective source switch.
+					\item remove the mac from macPortMap associated with that switch port pair.
+					\item remove the switch-port pair from portIpMap also.
+				\end{enumerate}
+			\item If destination switch exist in switch port pair:
+				\begin{enumerate}
+					\item remove any flow matching inPort to be destination port from the respective destination switch.
+					\item remove the mac from macPortMap associated with that switch port pair.
+					\item remove the switch-port pair from portIpMap also.
+				\end{enumerate}
+		\end{itemize}
+		
+		
+\end{enumerate}
+
+\printbibliography
+\end{document}
