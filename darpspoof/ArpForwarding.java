@@ -487,7 +487,6 @@ public class ArpForwarding implements IRoutingDecisionChangedListener{
 			user_fields |= AppCookie.extractUser(flowSetId) & FLOWSET_MASK;
 		}
 
-		// TODO: Mask in any other required fields here
 
 		if (user_fields == 0) {
 			return ARP_FORWARDING_COOKIE;
